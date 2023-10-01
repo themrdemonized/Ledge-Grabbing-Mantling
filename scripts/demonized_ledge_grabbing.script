@@ -1,0 +1,559 @@
+local gizmos = {
+	sphereStart = nil,
+	sphereEnd = nil,
+	rayLines = {},
+	pathLines = {},
+	climbNormal = nil,
+	sphereInter = nil,
+	sphereActor = nil,
+}
+
+local savedClimbPos
+local savedInterPos
+local savedCollisionPos
+local savedActorPos
+local savedActorDir
+local climbActive = false
+local id = 69000
+local idOffset = 0
+
+-- Settings
+local debugMode = true
+local climbTriggerDistance = 1.5
+local maxClimbHeight = 3.5
+local minClimbHeight = 1.5
+local raySteps = 15
+local animationTime = 1700
+
+-- Postpone on next n tick
+local nextTick = _G.nextTick or function(f, n)
+	n = math.floor(math.max(n or 1, 1))
+	AddUniqueCall(function()
+		if n == 1 then
+			return f()
+		else
+			n = n - 1
+			return false
+		end
+	end)
+end
+
+-- Linear inter/extrapolation
+local function lerp(a, b, f)
+    return a + f * (b - a)
+end
+
+local function vecLerp(v1, v2, f)
+    return vector():set(
+    	lerp(v1.x, v2.x, f),
+    	lerp(v1.y, v2.y, f),
+    	lerp(v1.z, v2.z, f)
+    )
+end
+
+local function similar(a, b, eps)
+	eps = eps or 0.00001
+	return math.abs(a - b) < eps
+end
+
+local function vecSimilar(v1, v2, eps)
+    return similar(v1.x, v2.x, eps) and similar(v1.y, v2.y, eps) and similar(v1.z, v2.z, eps)
+end
+
+local function cubicBezier(v1, v2, v3, v4, t)
+	return vector():set(
+		(1-t)^3*v1.x + 3*(1-t)^2*t*v2.x + 3*(1-t)*t^2*v3.x + t^3*v4.x,
+		(1-t)^3*v1.y + 3*(1-t)^2*t*v2.y + 3*(1-t)*t^2*v3.y + t^3*v4.y,
+		(1-t)^3*v1.z + 3*(1-t)^2*t*v2.z + 3*(1-t)*t^2*v3.z + t^3*v4.z
+	)
+end
+
+function isWall(position, direction, targetAngle)
+	targetAngle = targetAngle or 10
+	local normal = demonized_geometry_ray.get_surface_normal(
+		position,
+		direction
+	)
+	if not normal then return end
+
+	local angle = math.abs(math.deg(math.asin(normal.y)))
+    return angle < targetAngle, normal
+end
+
+function isFlat(position, direction, targetAngle)
+	targetAngle = targetAngle or 20
+	local normal = demonized_geometry_ray.get_surface_normal(
+		position,
+		direction
+	)
+	if not normal then return end
+
+	local angle = math.abs(math.deg(math.acos(normal.y)))
+    return angle < targetAngle, normal
+end
+
+function actor_on_first_update()
+	savedActorPos = db.actor:position()
+	savedActorDir = db.actor:direction()
+	gizmos.sphereStart = debug_render.add_object(id + idOffset, DBG_ScriptObject.sphere):cast_dbg_sphere()
+	idOffset = idOffset + 1
+
+	gizmos.sphereEnd = debug_render.add_object(id + idOffset, DBG_ScriptObject.sphere):cast_dbg_sphere()
+	idOffset = idOffset + 1
+
+	gizmos.climbNormal = debug_render.add_object(id + idOffset, DBG_ScriptObject.line):cast_dbg_line()
+	idOffset = idOffset + 1
+
+	gizmos.sphereInter = debug_render.add_object(id + idOffset, DBG_ScriptObject.sphere):cast_dbg_sphere()
+	idOffset = idOffset + 1
+
+	gizmos.sphereActor = debug_render.add_object(id + idOffset, DBG_ScriptObject.sphere):cast_dbg_sphere()
+	idOffset = idOffset + 1
+
+	for i = 1, 20 do
+		gizmos.pathLines[i] = debug_render.add_object(id + idOffset, DBG_ScriptObject.line):cast_dbg_line()
+		idOffset = idOffset + 1
+	end
+	RegisterScriptCallback("actor_on_update", function() try(checkLedgeGrabbing) end)
+end
+
+function reset(gizmosArr)
+	if debugMode then
+		if gizmosArr then
+			for i = 1, #gizmosArr do
+				local gizmo = gizmosArr[i]
+				if gizmos[gizmo] then
+					local v = gizmos[gizmo]
+					if type(v) == "table" then
+						for i = 1, #v do
+							local p = v[i]
+							p.visible = false
+						end
+					else
+						v.visible = false
+					end
+				end
+			end
+		else
+			for k, v in pairs(gizmos) do
+				if type(v) == "table" then
+					for i = 1, #v do
+						local p = v[i]
+						p.visible = false
+					end
+				else
+					v.visible = false
+				end
+			end		
+		end
+	end
+	savedClimbPos = nil
+end
+
+function getClimbPathEndPoints(actorPos, collisionPos, interPos, climbPos)
+	local p1 = actorPos
+	local p2 = vector():set(interPos.x, actorPos.y, interPos.z)
+	local p3 = vector():set(
+		lerp(actorPos.x, climbPos.x, 0.25),
+		interPos.y,
+		lerp(actorPos.z, climbPos.z, 0.25)
+	)
+	local p4 = climbPos
+	return p1, p2, p3, p4
+end
+
+function checkClimbPrecondition()
+	-- Disable when on ladder
+	if IsMoveState("mcClimb") then return false end
+	return true
+end
+
+function checkLedgeGrabbing()
+	if climbActive then return reset() end
+
+	if not checkClimbPrecondition() then return reset() end
+
+	local actorPos = db.actor:position()
+	local actorDir = db.actor:direction()
+	if vecSimilar(actorPos, savedActorPos, 0.01) and vecSimilar(actorDir, savedActorDir, 0.01) then return end
+	savedActorPos = actorPos
+	savedActorDir = actorDir
+
+	-- Check if player has possibility to initiate climb
+	local collisionPos
+	local collisionNormal
+	local validCollisionPos = false
+	local climbPos
+	local climbNormal
+
+	local pos = actorPos
+	local maxY = actorPos.y + maxClimbHeight
+	local minY = actorPos.y + minClimbHeight
+	local rayRange = maxY - minY
+
+	-- TODO: Fix to make it work with exactly (0, -1, 0)
+	-- local dir = vector():set(0, -1, 0)
+	local dir = vector():set(-0.06, -0.998, -0.02)
+
+	local results = {
+		[0] = {vector():set(actorPos.x, maxY, actorPos.z):mad(dir, rayRange), vector():set(dir):invert()}
+	}
+
+	-- Shoot rays in array from max climb height to min climb height
+	-- Then check if found surface is flat
+	-- If all succeeds - found a point to climb to
+	-- Collision point will be the previous ray result from climb point, it will determine a wall
+	local rayStepDistance = climbTriggerDistance / raySteps
+	for j = 1, raySteps do
+		local i = rayStepDistance * j
+		local ray = demonized_geometry_ray.geometry_ray({
+			ray_range = rayRange,
+			flags = 2,
+			ignore_object = db.actor
+		})
+		local pos = vector():mad(actorPos, actorDir, i)
+		pos.y = maxY
+		local res = ray:get(pos, dir)
+		if res.success then
+			local flat, normal = isFlat(pos, dir)
+			if normal then
+				if not collisionPos then
+					collisionPos = results[j - 1][1]
+					collisionNormal = results[j - 1][2]
+				end
+
+				if debugMode then
+					if not gizmos.rayLines[j] then
+						gizmos.rayLines[j] = debug_render.add_object(id + idOffset, DBG_ScriptObject.line):cast_dbg_line()
+						idOffset = idOffset + 1
+					end
+					local p = gizmos.rayLines[j]
+					p.visible = true
+					p.color = fcolor():set(1,1,0,1)
+				    p.point_a = pos
+				    p.point_b = res.position
+				end
+
+				if flat then
+
+					-- Player height check on climbPos
+					-- If height is not enough - stop checking next position, assume that you cant move further
+					local ray = demonized_geometry_ray.geometry_ray({
+						ray_range = 1.2,
+						flags = 2,
+						ignore_object = db.actor
+					})
+					local heightRes = ray:get(res.position, vector():set(0,1,0))
+					validCollisionPos = not heightRes.success
+					climbPos = res.position
+					climbNormal = normal
+
+					if debugMode then
+						local p = gizmos.rayLines[j]
+						p.color = validCollisionPos and fcolor():set(0,1,0,1) or fcolor():set(1,0,0,1)
+						for k = j + 1, #gizmos.rayLines do
+							local x = gizmos.rayLines[k]
+							x.visible = false
+						end
+					end
+
+					break
+				end
+			else
+				if debugMode then
+					if not gizmos.rayLines[j] then
+						gizmos.rayLines[j] = debug_render.add_object(id + idOffset, DBG_ScriptObject.line):cast_dbg_line()
+						idOffset = idOffset + 1
+					end
+					local p = gizmos.rayLines[j]
+					p.visible = true
+					p.color = fcolor():set(1,0,0,1)
+				    p.point_a = pos
+				    p.point_b = res.position
+				end
+				results[j] = {res.position, vector():set(dir):invert()}
+			end
+		else
+			if debugMode then
+				if not gizmos.rayLines[j] then
+					gizmos.rayLines[j] = debug_render.add_object(id + idOffset, DBG_ScriptObject.line):cast_dbg_line()
+					idOffset = idOffset + 1
+				end
+				local p = gizmos.rayLines[j]
+				p.visible = true
+				p.color = fcolor():set(1,0,0,1)
+			    p.point_a = pos
+			    p.point_b = vector():mad(pos, dir, rayRange)
+			end
+			collisionPos = nil
+			collisionNormal = nil
+			validCollisionPos = false
+			results[j] = {vector():mad(pos, dir, rayRange), vector():set(dir):invert()}
+		end
+	end
+
+	if not collisionPos then
+		reset()
+		return
+	end
+
+	-- Draw results
+	if debugMode then
+	    gizmos.sphereStart.visible = true
+	    gizmos.sphereStart.color = fcolor():set(1,0,0,1)
+	    local scale_mat = matrix():identity():scale(0.1,0.1,0.1)
+	    local pos_mat = matrix():translate(collisionPos)
+	    local mat = matrix():mul(pos_mat, scale_mat)
+	    gizmos.sphereStart.matrix = mat
+	end
+
+	if not validCollisionPos then
+		reset({"pathLines", "sphereEnd", "climbNormal", "sphereInter", "sphereActor"})
+		return
+	end
+
+	if not climbPos then
+		reset({"pathLines", "sphereEnd", "climbNormal", "sphereInter", "sphereActor"})
+    	return
+	end
+
+    -- Compute climb path
+    -- Interpos is point that will aid in climb path computing and used as a collision check in order to not climb through walls mostly
+    local interPos = vector():set(
+    	collisionPos.x,
+    	climbPos.y + 0.15,
+    	collisionPos.z
+    )
+
+    -- Don't init climb if points arent on the screen
+    local climbPosUi = game.world2ui(climbPos)
+    local interPosUi = game.world2ui(interPos)
+
+    if not ((climbPosUi.x > 0 and climbPosUi.x < 1024 and climbPosUi.y > 0 and climbPosUi.y < 768) or (interPosUi.x > 0 and interPosUi.y < 1024 and interPosUi.y > 0 and interPosUi.y < 768)) then
+    	reset({"pathLines", "sphereEnd", "climbNormal", "sphereInter", "sphereActor"})
+    	return
+    end
+
+    if debugMode then
+    	gizmos.sphereEnd.visible = true
+	    gizmos.sphereEnd.color = fcolor():set(0,1,0,1)
+	    local scale_mat = matrix():identity():scale(0.1,0.1,0.1)
+	    local pos_mat = matrix():translate(climbPos)
+	    local mat = matrix():mul(pos_mat, scale_mat)
+	    gizmos.sphereEnd.matrix = mat
+
+	    gizmos.climbNormal.visible = true
+		gizmos.climbNormal.color = fcolor():set(0,1,0,1)
+		gizmos.climbNormal.point_a = climbPos
+		gizmos.climbNormal.point_b = vector():mad(climbPos, climbNormal, 1)
+
+	    gizmos.sphereInter.visible = true
+	    gizmos.sphereInter.color = fcolor():set(1,1,0,1)
+	    local scale_mat = matrix():identity():scale(0.1,0.1,0.1)
+	    local pos_mat = matrix():translate(interPos)
+	    local mat = matrix():mul(pos_mat, scale_mat)
+	    gizmos.sphereInter.matrix = mat
+	    
+	    gizmos.sphereActor.visible = true
+	    gizmos.sphereActor.color = fcolor():set(1,0,0,1)
+	    local scale_mat = matrix():identity():scale(0.1,0.1,0.1)
+	    local pos_mat = matrix():translate(actorPos)
+	    local mat = matrix():mul(pos_mat, scale_mat)
+	    gizmos.sphereActor.matrix = mat
+	end
+
+    -- Collision check for climb path - ray cast to interPos
+    local posToInterVec = vector():set(interPos):sub(actorPos)
+    local collisionCheckRay = demonized_geometry_ray.geometry_ray({
+    	ray_range = posToInterVec:magnitude(),
+		flags = 2,
+		ignore_object = db.actor
+    })
+	local pos = actorPos
+	local dir = vector():set(posToInterVec):normalize()
+	local res = collisionCheckRay:get(pos, dir)
+	local collisionCheck = res.distance == posToInterVec:magnitude()
+
+	if debugMode then
+	    local pathLinesNum = #gizmos.pathLines
+	    local p1, p2, p3, p4 = getClimbPathEndPoints(actorPos, collisionPos, interPos, climbPos)
+	    for i = 1, pathLinesNum do
+	    	local k = (i / pathLinesNum) - (1 / pathLinesNum)
+	    	local nextK = ((i+1) / pathLinesNum) - (1 / pathLinesNum)
+	    	local p = gizmos.pathLines[i]
+			p.visible = true
+			p.color = collisionCheck and fcolor():set(0,1,0,1) or fcolor():set(1,0,0,1)
+		    p.point_a = cubicBezier(p1, p2, p3, p4, k)
+		    p.point_b = cubicBezier(p1, p2, p3, p4, nextK)
+		end
+	end
+
+	if not collisionCheck then
+		savedClimbPos = nil
+		return
+	end
+
+	savedCollisionPos = collisionPos
+    savedClimbPos = climbPos
+    savedInterPos = interPos
+end
+
+function on_key_press(dik)
+	if dik == DIK_keys.DIK_G then
+		local ray = demonized_geometry_ray.geometry_ray({
+			ray_range = 5,
+			flags = 2,
+			ignore_object = db.actor
+		})
+		local pos = device().cam_pos
+		local dir = device().cam_dir
+		printf("%s", dir)
+		local res = ray:get(pos, dir)
+		if res.success then
+			-- printf("material_name %s", res.result.material_name)
+			-- printf("material_flags %s", res.result.material_flags)
+			-- printf("material_phfriction %s", res.result.material_phfriction)
+			-- printf("material_phdamping %s", res.result.material_phdamping)
+			-- printf("material_phspring %s", res.result.material_phspring)
+			-- printf("material_phbounce_start_velocity %s", res.result.material_phbounce_start_velocity)
+			-- printf("material_phbouncing %s", res.result.material_phbouncing)
+			-- printf("material_flotation_factor %s", res.result.material_flotation_factor)
+			-- printf("material_shoot_factor %s", res.result.material_shoot_factor)
+			-- printf("material_shoot_factor_mp %s", res.result.material_shoot_factor_mp)
+			-- printf("material_bounce_damage_factor %s", res.result.material_bounce_damage_factor)
+			-- printf("material_injurious_speed %s", res.result.material_injurious_speed)
+			-- printf("material_vis_transparency_factor %s", res.result.material_vis_transparency_factor)
+			-- printf("material_snd_occlusion_factor %s", res.result.material_snd_occlusion_factor)
+			-- printf("material_density_factor %s", res.result.material_density_factor)
+			-- print_r(ray:getMaterialFlags())
+
+			local normal = demonized_geometry_ray.get_surface_normal(pos, dir, {flags=2}, {visualize_time=1000})
+			printf("wall angle %s", math.abs(math.deg(math.acos(normal.y))))
+		end
+	end
+	if dik == DIK_keys.DIK_H and savedClimbPos then
+		climbActive = true
+		local startTime = time_global()
+		local endTime = startTime + animationTime
+		local k = 0
+		local climbPos = vector():set(savedClimbPos)
+		local interPos = vector():set(savedInterPos)
+		local collisionPos = vector():set(savedCollisionPos)
+		local actorPos = db.actor:position()
+
+		-- Get difference from camera height to position
+		local camY = device().cam_pos.y - actorPos.y
+		local adjustedClimbPos = vector():set(climbPos):add(vector():set(0, camY, 0))
+		local adjustedInterPos = vector():set(interPos):add(vector():set(0, camY, 0))
+		local adjustedCollisionPos = vector():set(collisionPos):add(vector():set(0, camY, 0))
+		local adjustedActorPos = db.actor:position():add(vector():set(0, camY, 0))
+
+		local camDir = device().cam_dir
+		local camDirHPB = vector():set(
+			camDir:getH(),
+			camDir:getP(),
+			0
+		)
+
+		-- make playerPos during climb so it will stay there during camera anim
+		-- Adjust it to fit animation
+		local playerPos = vector():set(
+			collisionPos.x,
+			climbPos.y - camY,
+			collisionPos.z
+		) 
+
+		local p1, p2, p3, p4 = getClimbPathEndPoints(adjustedActorPos, adjustedCollisionPos, adjustedInterPos, adjustedClimbPos)
+		
+		local activeSlot = db.actor:active_slot()
+		local activeWpn = db.actor:active_item()
+		local activeDetector = db.actor:active_detector()
+		local activeWpnId
+		local activeDetectorId
+		if activeWpn or activeDetector then
+			if activeWpn then
+				db.actor:move_to_ruck(activeWpn)
+				activeWpnId = activeWpn:id()
+			end
+			if activeDetector then
+				db.actor:move_to_ruck(activeDetector)
+				activeDetectorId = activeDetector:id()
+			end	
+		end
+
+		-- game.only_allow_movekeys(true)
+		game.set_actor_allow_ladder(false)
+
+		-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
+		nextTick(function()
+			game.play_hud_motion(2, "item_anm_ledge_grabbing", "anm_climb", true, 0.7)
+			-- game.play_hud_anm("camera_effects\\climbing_in.anm", 2, 1, 1, false, true)
+			-- level.add_cam_effector("camera_effects\\climbing_in.anm", 99999, false, "", 0, true, 1)
+
+			local performClimb
+			performClimb = function()
+				if k > 0.98 then
+					climbActive = false
+
+					local p = cubicBezier(p1, p2, p3, p4, k)
+					p.y = p.y - camY
+					db.actor:set_actor_direction(-camDirHPB.x, -camDirHPB.y)
+					db.actor:set_actor_position(p, true)
+					level.remove_cam_custom_position_direction()
+
+					if activeWpnId or activeDetectorId then
+						if activeWpnId then
+							local obj = level.object_by_id(activeWpnId)
+							if obj then
+								db.actor:move_to_slot(obj, activeSlot)
+								nextTick(function()
+									db.actor:activate_slot(activeSlot)
+									return true
+								end, 2)
+							end
+						end
+						if activeDetectorId then
+							local obj = level.object_by_id(activeDetectorId)
+							if obj then
+								db.actor:move_to_slot(obj, 9)
+
+								-- Time event for proper animation play
+								CreateTimeEvent("ledge_grabbing", "activate_detector", 0.5, function()
+									obj:switch_state(1)
+									return true
+								end)
+							end
+						end
+					end
+
+					-- game.only_allow_movekeys(false)
+					game.set_actor_allow_ladder(true)
+
+					UnregisterScriptCallback("actor_on_update", performClimb)
+					return
+				end
+				db.actor:set_actor_position(playerPos, true)
+				db.actor:set_actor_direction(-camDirHPB.x)
+
+				k = normalize(time_global(), startTime, endTime)
+				k = demonized_randomizing_functions.QuinticEaseInOut(k)
+				k = math.min(1, k)
+				local p = cubicBezier(p1, p2, p3, p4, k)
+				level.set_cam_custom_position_direction(p, camDirHPB, 1, true, false)
+			end
+			RegisterScriptCallback("actor_on_update", performClimb)
+			return true
+		end, 2)		
+	end
+	if dik == DIK_keys.DIK_J then
+		debugMode = not debugMode
+		if not debugMode then
+			reset()
+		end
+	end
+end
+
+function on_game_start()
+	RegisterScriptCallback("on_key_press", on_key_press)
+	RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+end
