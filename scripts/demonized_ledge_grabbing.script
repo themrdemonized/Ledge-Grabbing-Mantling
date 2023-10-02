@@ -23,7 +23,6 @@ local climbTriggerDistance = 1.5
 local maxClimbHeight = 3.5
 local minClimbHeight = 1.5
 local raySteps = 15
-local animationTime = 1700
 
 -- Postpone on next n tick
 local nextTick = _G.nextTick or function(f, n)
@@ -514,6 +513,15 @@ function on_key_press(dik)
 			end	
 		end
 
+		-- Uncrouch if was crouched
+		if IsMoveState("mcCrouch") then
+			if (get_console():get_bool("crouch_toggle")) then
+				level.press_action(bind_to_dik(key_bindings.kCROUCH))
+			else
+				level.release_action(bind_to_dik(key_bindings.kCROUCH))
+			end
+		end
+
 		-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
 		nextTick(function()
 			climbActive = true
@@ -546,13 +554,21 @@ function on_key_press(dik)
 
 			local p1, p2, p3, p4 = getClimbPathEndPoints(adjustedActorPos, adjustedCollisionPos, adjustedInterPos, adjustedClimbPos)
 
+			local d = vector():set(actorPos):sub(collisionPos)
+			d.y = 0
+			d:normalize()
+			local startCameraPos = vector():mad(collisionPos, d, 0.4)
+			startCameraPos.y = climbPos.y - 0.4
+			-- startCameraPos.y = math.max(adjustedActorPos.y, climbPos.y - 0.5)
+
 			local animationSpeed = 0.8
 			local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
 			local startTime = time_global()
-			local animationStartTime = startTime / 1000
-			local animationEndTime = animationStartTime + animationData.calculatedTime / animationSpeed
+			local animationStartTime = 0
+			local animationEndTime = animationData.calculatedTime
 			local endTime = startTime + animationData.calculatedTime * 1000 / animationSpeed
-			local k = 0
+			local animInTime = 30 / animationData.originalFps
+			local animOutTime = 57 / animationData.originalFps
 
 			local hudMotionSpeed = 0.7
 			local hudMotionStarted = false
@@ -560,13 +576,14 @@ function on_key_press(dik)
 				if not hudMotionStarted then
 					hudMotionStarted = true
 					game.play_hud_motion(2, "item_anm_ledge_grabbing", "anm_climb", true, animationSpeed * hudMotionSpeed)
-					level.add_cam_effector("camera_effects\\climbing_in.anm", 99999, false, "", 0, true, 1)
+					-- level.add_cam_effector("camera_effects\\climbing_in.anm", 99999, false, "", 0, true, 1)
 				end
 			end			
 
 			-- game.only_allow_movekeys(true)
 			game.set_actor_allow_ladder(false)
-			
+
+			local k = 0
 			local resultPosition
 			local performClimb
 			performClimb = function()
@@ -617,7 +634,7 @@ function on_key_press(dik)
 					end
 
 					-- TODO: read camera animation from the data
-					local animTime = (time_global() / 1000 - animationStartTime) * animationSpeed
+					local animTime = (time_global() - startTime) / 1000 * animationSpeed
 
 					local locationX = animationData.curves.locationX
 					local delta, lo, hi = lookup(locationX, animTime)
@@ -631,52 +648,29 @@ function on_key_press(dik)
 					local delta, lo, hi = lookup(locationZ, animTime)
 					local locationZRes = cubicBezier2D(locationZ[lo][1], locationZ[lo][2], locationZ[lo][3], locationZ[lo][4], delta)
 
-					print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n ", locationXRes, locationYRes, locationZRes, delta, lo, hi)
-
-					local d = vector():set(actorPos):sub(collisionPos)
-					d.y = 0
-					d:normalize()
-					local newActorPos = vector():mad(collisionPos, d, 0.5)
-					newActorPos.y = adjustedActorPos.y
 					local cameraPos = vector():set(
-						newActorPos.x + locationXRes.y,
-						newActorPos.y + locationYRes.y,
-						newActorPos.z + locationZRes.y
+						startCameraPos.x + locationXRes.y,
+						startCameraPos.y + locationYRes.y,
+						startCameraPos.z + locationZRes.y
 					)
-					local newP1 = vector():set(p1)
-					newP1.x = newActorPos.x
-					newP1.z = newActorPos.z
 
 					k = normalize(time_global(), startTime, endTime)
 					k = math.min(1, k)
 					local cameraPos2 = cubicBezier(p1, p2, p3, p4, demonized_randomizing_functions.CubicEaseInOut(k))
 
-					local resultLerp = cubicBezier2D(
-						vector():set(0, 1, 0),
-						vector():set(0, -0.25, 0),
-						vector():set(0.53, -0.4, 0),
-						vector():set(1, 1, 0),
-						k
-					)
-
-					resultPosition = vecLerp(cameraPos, cameraPos2, resultLerp.y)
-					level.set_cam_custom_position_direction(resultPosition, camDirHPB, 1, true, false)
-					-- level.set_cam_custom_position_direction(p, camDirHPB, 1, true, false)
-
-					local currentPlayerPos
-					local playerPosLerpCoeff = math.min(1, normalize(animTime, 0, 0.5 / animationSpeed))
-					currentPlayerPos = vecLerp(
+					local animInK = math.min(1, normalize(animTime, 0, animInTime))
+					animInK = demonized_randomizing_functions.QuadraticEaseInOut(animInK)
+					resultPosition = vecLerp(cameraPos2, cameraPos, animInK)
+					
+					local currentPlayerPos = vecLerp(
 						vector():set(
 							resultPosition.x,
 							resultPosition.y - camY - 0.1,
 							resultPosition.z
 						),
 						playerPos,
-						playerPosLerpCoeff
+						animInK
 					)					
-					db.actor:set_actor_position(currentPlayerPos, true)
-					db.actor:set_actor_direction(-camDirHPB.x)
-					startHudMotion()
 
 					resultPosition = vecLerp(
 						vector():set(
@@ -685,8 +679,22 @@ function on_key_press(dik)
 							currentPlayerPos.z
 						),
 						resultPosition,
-						playerPosLerpCoeff
+						animInK
 					)
+
+					local animOutK = clamp(normalize(animTime, animOutTime, animationEndTime), 0, 1)
+					animOutK = demonized_randomizing_functions.QuadraticEaseInOut(animOutK)
+					resultPosition = vecLerp(
+						resultPosition,
+						cameraPos2,
+						animOutK
+					)
+
+					print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, delta, lo, hi, animInK, animOutK, animTime)
+
+					db.actor:set_actor_position(currentPlayerPos, true)
+					db.actor:set_actor_direction(-camDirHPB.x)
+					startHudMotion()
 					level.set_cam_custom_position_direction(resultPosition, camDirHPB, 1, true, false)
 				end)
 			end
