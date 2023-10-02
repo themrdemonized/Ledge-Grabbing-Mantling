@@ -1,6 +1,9 @@
 # Python script for export anim data in blender
 # Paste in Blender scripting window
 
+# Python script for export anim data in blender
+# Paste in Blender scripting window
+
 import bpy
 
 context = bpy.context
@@ -11,14 +14,18 @@ print(obj)
 print(action)
 indexToAxis = {
     0: 'X',
-    1: 'Y',
-    2: 'Z',
+    1: 'Z',
+    2: 'Y',
+    3: 'Y',
+    4: 'Z',
+    5: 'X'
 }
 
 length = context.scene.frame_end
 fps = context.scene.render.fps
 animTime = length / fps 
 curves = {}
+j = 0
 for fcurve in action.fcurves:
     i = 0
     time = 0
@@ -51,7 +58,8 @@ for fcurve in action.fcurves:
         curve[p1[0] / fps] = [p1, p2, p3, p4]
         i = i + 1
     curve[animTime] = [p4, p4, p4, p4]
-    curves[fcurve.data_path + indexToAxis[fcurve.array_index]] = curve
+    curves[fcurve.data_path + indexToAxis[j]] = curve
+    j = j + 1
 
 formattedCurves = ""
 for curve in curves:
