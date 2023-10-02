@@ -21,7 +21,7 @@ local idOffset = 0
 local debugMode = true
 local climbTriggerDistance = 1.5
 local maxClimbHeight = 3.5
-local minClimbHeight = 1.5
+local minClimbHeight = 1.4
 local raySteps = 15
 
 -- Postpone on next n tick
@@ -522,67 +522,60 @@ function on_key_press(dik)
 			end
 		end
 
+		climbActive = true
+		local climbPos = vector():set(savedClimbPos)
+		local interPos = vector():set(savedInterPos)
+		local collisionPos = vector():set(savedCollisionPos)
+		local actorPos = db.actor:position()
+
+		-- Get difference from camera height to position
+		local camY = device().cam_pos.y - actorPos.y
+		local adjustedClimbPos = vector():set(climbPos):add(vector():set(0, camY, 0))
+		local adjustedInterPos = vector():set(interPos):add(vector():set(0, camY, 0))
+		local adjustedCollisionPos = vector():set(collisionPos):add(vector():set(0, camY, 0))
+		local adjustedActorPos = vector():set(actorPos):add(vector():set(0, camY, 0))
+
+		local camDir = device().cam_dir
+		local camDirHPB = vector():set(
+			camDir:getH(),
+			camDir:getP(),
+			0
+		)
+
+		-- make playerPos during climb so it will stay there during camera anim
+		-- Adjust it to fit animation
+		local playerPos = vector():set(
+			collisionPos.x,
+			climbPos.y - camY,
+			collisionPos.z
+		) 
+
+		local p1, p2, p3, p4 = getClimbPathEndPoints(adjustedActorPos, adjustedCollisionPos, adjustedInterPos, adjustedClimbPos)
+
+		local d = vector():set(actorPos):sub(collisionPos)
+		d.y = 0
+		d:normalize()
+		local startCameraPos = vector():mad(collisionPos, d, 0.4)
+		startCameraPos.y = climbPos.y - 0.4
+		-- startCameraPos.y = math.max(adjustedActorPos.y, climbPos.y - 0.5)
+
+		local animationSpeed = 0.8
+		local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
+		local startTime = time_global()
+		local animationStartTime = 0
+		local animationEndTime = animationData.calculatedTime
+		local endTime = startTime + animationData.calculatedTime / animationSpeed * 1000 
+		local animInTime = 30 / animationData.originalFps
+		local animOutTime = 50 / animationData.originalFps
+
+		local hudMotionSpeed = 0.8
+		local hudMotionStarted = false		
+
+		-- game.only_allow_movekeys(true)
+		game.set_actor_allow_ladder(false)
+
 		-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
 		nextTick(function()
-			climbActive = true
-			local climbPos = vector():set(savedClimbPos)
-			local interPos = vector():set(savedInterPos)
-			local collisionPos = vector():set(savedCollisionPos)
-			local actorPos = db.actor:position()
-
-			-- Get difference from camera height to position
-			local camY = device().cam_pos.y - actorPos.y
-			local adjustedClimbPos = vector():set(climbPos):add(vector():set(0, camY, 0))
-			local adjustedInterPos = vector():set(interPos):add(vector():set(0, camY, 0))
-			local adjustedCollisionPos = vector():set(collisionPos):add(vector():set(0, camY, 0))
-			local adjustedActorPos = db.actor:position():add(vector():set(0, camY, 0))
-
-			local camDir = device().cam_dir
-			local camDirHPB = vector():set(
-				camDir:getH(),
-				camDir:getP(),
-				0
-			)
-
-			-- make playerPos during climb so it will stay there during camera anim
-			-- Adjust it to fit animation
-			local playerPos = vector():set(
-				collisionPos.x,
-				climbPos.y - camY,
-				collisionPos.z
-			) 
-
-			local p1, p2, p3, p4 = getClimbPathEndPoints(adjustedActorPos, adjustedCollisionPos, adjustedInterPos, adjustedClimbPos)
-
-			local d = vector():set(actorPos):sub(collisionPos)
-			d.y = 0
-			d:normalize()
-			local startCameraPos = vector():mad(collisionPos, d, 0.4)
-			startCameraPos.y = climbPos.y - 0.4
-			-- startCameraPos.y = math.max(adjustedActorPos.y, climbPos.y - 0.5)
-
-			local animationSpeed = 0.8
-			local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
-			local startTime = time_global()
-			local animationStartTime = 0
-			local animationEndTime = animationData.calculatedTime
-			local endTime = startTime + animationData.calculatedTime * 1000 / animationSpeed
-			local animInTime = 30 / animationData.originalFps
-			local animOutTime = 57 / animationData.originalFps
-
-			local hudMotionSpeed = 0.7
-			local hudMotionStarted = false
-			local function startHudMotion()
-				if not hudMotionStarted then
-					hudMotionStarted = true
-					game.play_hud_motion(2, "item_anm_ledge_grabbing", "anm_climb", true, animationSpeed * hudMotionSpeed)
-					-- level.add_cam_effector("camera_effects\\climbing_in.anm", 99999, false, "", 0, true, 1)
-				end
-			end			
-
-			-- game.only_allow_movekeys(true)
-			game.set_actor_allow_ladder(false)
-
 			local k = 0
 			local resultPosition
 			local performClimb
@@ -648,6 +641,18 @@ function on_key_press(dik)
 					local delta, lo, hi = lookup(locationZ, animTime)
 					local locationZRes = cubicBezier2D(locationZ[lo][1], locationZ[lo][2], locationZ[lo][3], locationZ[lo][4], delta)
 
+					local rotationX = animationData.curves.rotation_eulerX
+					local delta, lo, hi = lookup(rotationX, animTime * hudMotionSpeed)
+					local rotationXRes = cubicBezier2D(rotationX[lo][1], rotationX[lo][2], rotationX[lo][3], rotationX[lo][4], delta)
+
+					local rotationY = animationData.curves.rotation_eulerY
+					local delta, lo, hi = lookup(rotationY, animTime * hudMotionSpeed)
+					local rotationYRes = cubicBezier2D(rotationY[lo][1], rotationY[lo][2], rotationY[lo][3], rotationY[lo][4], delta)
+
+					local rotationZ = animationData.curves.rotation_eulerZ
+					local delta, lo, hi = lookup(rotationZ, animTime * hudMotionSpeed)
+					local rotationZRes = cubicBezier2D(rotationZ[lo][1], rotationZ[lo][2], rotationZ[lo][3], rotationZ[lo][4], delta)
+
 					local cameraPos = vector():set(
 						startCameraPos.x + locationXRes.y,
 						startCameraPos.y + locationYRes.y,
@@ -694,8 +699,25 @@ function on_key_press(dik)
 
 					db.actor:set_actor_position(currentPlayerPos, true)
 					db.actor:set_actor_direction(-camDirHPB.x)
-					startHudMotion()
-					level.set_cam_custom_position_direction(resultPosition, camDirHPB, 1, true, false)
+
+					local cameraRot = vector():set(
+						camDirHPB.x + rotationXRes.y,
+						camDirHPB.y + rotationYRes.y,
+						camDirHPB.z + rotationZRes.y
+					)
+					cameraRot = vecLerp(
+						cameraRot,
+						camDirHPB,
+						animOutK
+					)
+					level.set_cam_custom_position_direction(resultPosition, cameraRot, 1, true, false)
+					if not hudMotionStarted then
+						hudMotionStarted = true
+						nextTick(function()
+							game.play_hud_motion(2, "item_anm_ledge_grabbing", "anm_climb", true, animationSpeed * hudMotionSpeed)
+							return true
+						end)
+					end
 				end)
 			end
 			RegisterScriptCallback("actor_on_update", performClimb)
