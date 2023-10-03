@@ -25,7 +25,7 @@ local climbTriggerDistance = 1.3
 local maxClimbHeight = 3.2
 local minClimbHeight = 1.5
 local raySteps = 15
-local jumpTriggerTime = 125
+local jumpTriggerTime = 70
 
 -- Postpone on next n tick
 local nextTick = _G.nextTick or function(f, n)
@@ -529,6 +529,8 @@ function tryToClimb()
 	-- Get difference from camera height to position
 	local camY = device().cam_pos.y - actorPos.y
 
+	-- TODO: improve playerPos by shooting a ray in front to check the possible
+
 	-- make playerPos during climb so it will stay there during camera anim
 	-- Adjust it to fit animation
 	local playerPos = vector():set(
@@ -714,7 +716,7 @@ function tryToClimb()
 					animOutK
 				)
 
-				print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
+				-- print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
 
 				-- Calculate rotations
 				-- Interpolate look to grab point
@@ -756,9 +758,9 @@ function tryToClimb()
 
 				-- Apply additive from prebaked animation
 				cameraRot = vector():set(
-					cameraRot.x + rotationXRes.y,
-					cameraRot.y + rotationYRes.y,
-					cameraRot.z + rotationZRes.y
+					cameraRot.x + rotationXRes.y / 2,
+					cameraRot.y + rotationYRes.y / 2,
+					cameraRot.z + rotationZRes.y / 2
 				)
 
 				-- Return to initial rotation when returning from animation to procedural
@@ -805,7 +807,7 @@ function checkJump(pressed)
 		end
 	elseif key_state(DIK_keys.DIK_SPACE) == 1 then
 		if not IsMoveState('mcJump') then
-			print_tip("Not jumping stop check")
+			-- print_tip("Not jumping stop check")
 			UnregisterScriptCallback("actor_on_update", checkJump)
 			return
 		end
