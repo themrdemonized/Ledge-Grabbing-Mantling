@@ -14,16 +14,18 @@ local savedInterPos
 local savedCollisionPos
 local savedActorPos
 local savedActorDir
+local savedJumpPressedTime = math.huge
 local climbActive = false
 local id = 69000
 local idOffset = 0
 
 -- Settings
 local debugMode = true
-local climbTriggerDistance = 1.5
-local maxClimbHeight = 3.5
-local minClimbHeight = 1.4
+local climbTriggerDistance = 1.3
+local maxClimbHeight = 3.2
+local minClimbHeight = 1.5
 local raySteps = 15
+local jumpTriggerTime = 125
 
 -- Postpone on next n tick
 local nextTick = _G.nextTick or function(f, n)
@@ -490,6 +492,336 @@ function checkLedgeGrabbing()
     savedClimbNormal = climbNormal
 end
 
+function tryToClimb()
+	if not (savedClimbPos and not climbActive) then return end
+
+	local activeSlot = db.actor:active_slot()
+	local activeWpn = db.actor:active_item()
+	local activeDetector = db.actor:active_detector()
+	local activeWpnId
+	local activeDetectorId
+	if activeWpn or activeDetector then
+		if activeWpn then
+			db.actor:move_to_ruck(activeWpn)
+			activeWpnId = activeWpn:id()
+		end
+		if activeDetector then
+			db.actor:move_to_ruck(activeDetector)
+			activeDetectorId = activeDetector:id()
+		end	
+	end
+
+	-- Uncrouch if was crouched
+	if IsMoveState("mcCrouch") then
+		if (get_console():get_bool("crouch_toggle")) then
+			level.press_action(bind_to_dik(key_bindings.kCROUCH))
+		else
+			level.release_action(bind_to_dik(key_bindings.kCROUCH))
+		end
+	end
+
+	climbActive = true
+	local climbPos = vector():set(savedClimbPos)
+	local interPos = vector():set(savedInterPos)
+	local collisionPos = vector():set(savedCollisionPos)
+	local actorPos = db.actor:position()
+
+	-- Get difference from camera height to position
+	local camY = device().cam_pos.y - actorPos.y
+
+	-- make playerPos during climb so it will stay there during camera anim
+	-- Adjust it to fit animation
+	local playerPos = vector():set(
+		collisionPos.x,
+		climbPos.y - camY,
+		collisionPos.z
+	) 
+
+	-- Adjusted positions by difference from camera
+	local adjustedClimbPos = vector():set(climbPos):add(vector():set(0, camY, 0))
+	local adjustedInterPos = vector():set(interPos):add(vector():set(0, camY, 0))
+	local adjustedCollisionPos = vector():set(collisionPos):add(vector():set(0, camY, 0))
+	local adjustedActorPos = vector():set(actorPos):add(vector():set(0, camY, 0))
+
+	local camDir = device().cam_dir
+	local camDirHPB = vector():set(
+		camDir:getH(),
+		camDir:getP(),
+		0
+	)
+
+	local p1, p2, p3, p4 = getClimbPathEndPoints(adjustedActorPos, adjustedCollisionPos, adjustedInterPos, adjustedClimbPos)
+
+	-- Distance from collision point to camera for better hands display
+	local startCameraDistance = 0.4
+
+	-- Camera offset
+	local startCameraOffset = vector():set(0, -0.4, 0)
+
+	-- Camera offset when in animIn state
+	local animInCameraOffset = vector():set(0, 0.1, 0)
+
+	local d = vector():set(collisionPos):sub(climbPos)
+	d.y = 0
+	d:normalize()
+	local p = vector():set(playerPos)
+	p.y = p.y + camY
+	local startCameraPos = vector():mad(p, d, startCameraDistance)
+	-- startCameraPos.y = climbPos.y
+	startCameraPos:add(startCameraOffset)
+
+	local animationSpeed = 0.8
+	local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
+	local startTime = time_global()
+	local animationStartTime = 0
+	local animationEndTime = animationData.calculatedTime
+	local endTime = startTime + animationData.calculatedTime / animationSpeed * 1000 
+	local animInTime = 26 / animationData.originalFps
+	local animOutTime = 50 / animationData.originalFps
+
+	local hudMotionSpeed = 0.78
+	local hudMotionStarted = false		
+
+	-- game.only_allow_movekeys(true)
+	game.set_actor_allow_ladder(false)
+
+	-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
+	nextTick(function()
+		local k = 0
+		local performClimb
+		performClimb = function()
+			try(function()
+				-- If close to animation end - stop and give control to player
+				if k > 0.98 then
+
+					local p = cubicBezier(p1, p2, p3, p4, k)
+					p.y = p.y - camY + 0.07 -- Small offset for better collision handling
+					db.actor:set_actor_direction(-camDirHPB.x)
+					db.actor:set_actor_position(p)
+					level.remove_cam_custom_position_direction()
+					game.stop_hud_motion()
+
+					-- Restore weapons if had
+					if activeWpnId or activeDetectorId then
+						if activeWpnId then
+							local obj = level.object_by_id(activeWpnId)
+							if obj then
+								db.actor:move_to_slot(obj, activeSlot)
+								nextTick(function()
+									db.actor:activate_slot(activeSlot)
+									return true
+								end, 2)
+							end
+						end
+						if activeDetectorId then
+							local obj = level.object_by_id(activeDetectorId)
+							if obj then
+								db.actor:move_to_slot(obj, 9)
+
+								-- Time event for proper animation play
+								CreateTimeEvent("ledge_grabbing", "activate_detector", 0.5, function()
+									obj:switch_state(1)
+									return true
+								end)
+							end
+						end
+					end
+
+					-- game.only_allow_movekeys(false)
+					game.set_actor_allow_ladder(true)
+
+					-- Set flag after some time
+					UnregisterScriptCallback("actor_on_update", performClimb)
+					CreateTimeEvent("ledge_grabbing", "reset", 0.5, function()
+						climbActive = false
+						return true
+					end)
+					return
+				end
+
+				local animTime = (time_global() - startTime) / 1000 * animationSpeed
+
+				-- Get camera params from animation data					
+				local locationX = animationData.curves.locationX
+				local delta, lo, hi = lookup(locationX, animTime)
+				local locationXRes = cubicBezier2D(locationX[lo][1], locationX[lo][2], locationX[lo][3], locationX[lo][4], delta)
+				local animDelta, animLo, animHi = delta, lo, hi
+
+				local locationY = animationData.curves.locationY
+				local delta, lo, hi = lookup(locationY, animTime)
+				local locationYRes = cubicBezier2D(locationY[lo][1], locationY[lo][2], locationY[lo][3], locationY[lo][4], delta)
+
+				local locationZ = animationData.curves.locationZ
+				local delta, lo, hi = lookup(locationZ, animTime)
+				local locationZRes = cubicBezier2D(locationZ[lo][1], locationZ[lo][2], locationZ[lo][3], locationZ[lo][4], delta)
+
+				local rotationX = animationData.curves.rotation_eulerX
+				local delta, lo, hi = lookup(rotationX, animTime * hudMotionSpeed)
+				local rotationXRes = cubicBezier2D(rotationX[lo][1], rotationX[lo][2], rotationX[lo][3], rotationX[lo][4], delta)
+
+				local rotationY = animationData.curves.rotation_eulerY
+				local delta, lo, hi = lookup(rotationY, animTime * hudMotionSpeed)
+				local rotationYRes = cubicBezier2D(rotationY[lo][1], rotationY[lo][2], rotationY[lo][3], rotationY[lo][4], delta)
+
+				local rotationZ = animationData.curves.rotation_eulerZ
+				local delta, lo, hi = lookup(rotationZ, animTime * hudMotionSpeed)
+				local rotationZRes = cubicBezier2D(rotationZ[lo][1], rotationZ[lo][2], rotationZ[lo][3], rotationZ[lo][4], delta)
+
+				local cameraPos = vector():set(
+					startCameraPos.x + locationXRes.y,
+					startCameraPos.y + locationYRes.y,
+					startCameraPos.z + locationZRes.y
+				)
+
+				-- Calculate procedural camera transform
+				k = normalize(time_global(), startTime, endTime)
+				k = math.min(1, k)
+				local cameraPos2 = cubicBezier(p1, p2, p3, p4, demonized_randomizing_functions.CubicEaseInOut(k))
+
+				-- Interpolate between procedural and animation camera in animInTime
+				local animInK = math.min(1, normalize(animTime, 0, animInTime))
+				animInK = demonized_randomizing_functions.QuadraticEaseInOut(animInK)
+				local resultPosition = vecLerp(cameraPos2, cameraPos, animInK)
+				
+				-- Move player with camera then stop it to playerPos
+				local currentPlayerPos = vecLerp(
+					vector():set(
+						resultPosition.x,
+						resultPosition.y - camY,
+						resultPosition.z
+					):sub(animInCameraOffset),
+					playerPos,
+					animInK
+				)					
+
+				-- Reattach camera to player pos and interpolate to calculated resuult
+				-- resultPosition = vecLerp(
+				-- 	vector():set(
+				-- 		currentPlayerPos.x,
+				-- 		currentPlayerPos.y + camY,
+				-- 		currentPlayerPos.z
+				-- 	):add(animInCameraOffset),
+				-- 	resultPosition,
+				-- 	animInK
+				-- )
+
+				-- Calculate position when returning from animation to procedural 
+				local animOutK = clamp(normalize(animTime, animOutTime, animationEndTime), 0, 1)
+				animOutK = demonized_randomizing_functions.QuadraticEaseInOut(animOutK)
+				resultPosition = vecLerp(
+					resultPosition,
+					cameraPos2,
+					animOutK
+				)
+
+				print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
+
+				-- Calculate rotations
+				-- Interpolate look to grab point
+				local dirFromActorPosToGrabPos = vector():set(
+					interPos.x - resultPosition.x,
+					climbPos.y - resultPosition.y,
+					interPos.z - resultPosition.z
+				):normalize()
+				dirFromActorPosToGrabPos = vector():set(
+					camDirHPB.x,
+					dirFromActorPosToGrabPos:getP(),
+					0
+				)
+				local cameraRot = vecLerp(
+					camDirHPB,
+					dirFromActorPosToGrabPos,
+					animInK
+				)
+
+				local animRotationK = clamp(normalize(animTime, animInTime, animOutTime), 0, 1)
+				animRotationK = demonized_randomizing_functions.QuadraticEaseInOut(animRotationK)
+
+				-- Interpolate look to climbPos
+				local dirFromActorPosToClimbPos = vector():set(
+					climbPos.x - resultPosition.x,
+					climbPos.y - resultPosition.y,
+					climbPos.z - resultPosition.z
+				):normalize()
+				dirFromActorPosToClimbPos = vector():set(
+					camDirHPB.x,
+					dirFromActorPosToClimbPos:getP() / 4,
+					0
+				)
+				cameraRot = vecLerp(
+					cameraRot,
+					dirFromActorPosToClimbPos,
+					animRotationK
+				)
+
+				-- Apply additive from prebaked animation
+				cameraRot = vector():set(
+					cameraRot.x + rotationXRes.y,
+					cameraRot.y + rotationYRes.y,
+					cameraRot.z + rotationZRes.y
+				)
+
+				-- Return to initial rotation when returning from animation to procedural
+				cameraRot = vecLerp(
+					cameraRot,
+					vector():set(
+						camDirHPB.x,
+						0,
+						0
+					),
+					animOutK
+				)
+
+				db.actor:set_actor_position(currentPlayerPos, true)
+				db.actor:set_actor_direction(-camDirHPB.x)
+				level.set_cam_custom_position_direction(resultPosition, cameraRot, 1, true, false)
+
+				-- Start hud motion on next tick
+				if not hudMotionStarted then
+					hudMotionStarted = true
+					nextTick(function()
+						game.play_hud_motion(2, "item_anm_ledge_grabbing", "anm_climb", true, animationSpeed * hudMotionSpeed)
+						return true
+					end)
+				end
+			end)
+		end
+
+		RegisterScriptCallback("actor_on_update", performClimb)
+		return true
+	end, 2)
+	return true
+end
+
+function checkJump(pressed)
+
+	if pressed == true then
+
+		-- If savedClimbPos is similar to camera height or below it - init climb immediately
+		if savedClimbPos and (savedClimbPos.y < device().cam_pos.y or similar(savedClimbPos.y, device().cam_pos.y, 0.15)) then
+			if tryToClimb() then
+				UnregisterScriptCallback("actor_on_update", checkJump)
+			end
+		end
+	elseif key_state(DIK_keys.DIK_SPACE) == 1 then
+		if not IsMoveState('mcJump') then
+			print_tip("Not jumping stop check")
+			UnregisterScriptCallback("actor_on_update", checkJump)
+			return
+		end
+
+		-- Otherwise try after sometime
+		if time_global() - savedJumpPressedTime > jumpTriggerTime then
+			if tryToClimb() then
+				UnregisterScriptCallback("actor_on_update", checkJump)
+				return
+			end
+		end
+	else
+		UnregisterScriptCallback("actor_on_update", checkJump)
+	end
+end
+
 function on_key_press(dik)
 	if dik == DIK_keys.DIK_G then
 		local ray = demonized_geometry_ray.geometry_ray({
@@ -523,307 +855,20 @@ function on_key_press(dik)
 			printf("wall angle %s", math.abs(math.deg(math.acos(normal.y))))
 		end
 	end
-	if dik == DIK_keys.DIK_H and savedClimbPos and not climbActive then
-		local activeSlot = db.actor:active_slot()
-		local activeWpn = db.actor:active_item()
-		local activeDetector = db.actor:active_detector()
-		local activeWpnId
-		local activeDetectorId
-		if activeWpn or activeDetector then
-			if activeWpn then
-				db.actor:move_to_ruck(activeWpn)
-				activeWpnId = activeWpn:id()
-			end
-			if activeDetector then
-				db.actor:move_to_ruck(activeDetector)
-				activeDetectorId = activeDetector:id()
-			end	
-		end
-
-		-- Uncrouch if was crouched
-		if IsMoveState("mcCrouch") then
-			if (get_console():get_bool("crouch_toggle")) then
-				level.press_action(bind_to_dik(key_bindings.kCROUCH))
-			else
-				level.release_action(bind_to_dik(key_bindings.kCROUCH))
-			end
-		end
-
-		climbActive = true
-		local climbPos = vector():set(savedClimbPos)
-		local interPos = vector():set(savedInterPos)
-		local collisionPos = vector():set(savedCollisionPos)
-		local actorPos = db.actor:position()
-
-		-- Get difference from camera height to position
-		local camY = device().cam_pos.y - actorPos.y
-
-		-- make playerPos during climb so it will stay there during camera anim
-		-- Adjust it to fit animation
-		local playerPos = vector():set(
-			collisionPos.x,
-			climbPos.y - camY,
-			collisionPos.z
-		) 
-
-		-- Adjusted positions by difference from camera
-		local adjustedClimbPos = vector():set(climbPos):add(vector():set(0, camY, 0))
-		local adjustedInterPos = vector():set(interPos):add(vector():set(0, camY, 0))
-		local adjustedCollisionPos = vector():set(collisionPos):add(vector():set(0, camY, 0))
-		local adjustedActorPos = vector():set(actorPos):add(vector():set(0, camY, 0))
-
-		local camDir = device().cam_dir
-		local camDirHPB = vector():set(
-			camDir:getH(),
-			camDir:getP(),
-			0
-		)
-
-		local p1, p2, p3, p4 = getClimbPathEndPoints(adjustedActorPos, adjustedCollisionPos, adjustedInterPos, adjustedClimbPos)
-
-		-- Distance from collision point to camera for better hands display
-		local startCameraDistance = 0.4
-
-		-- Camera offset
-		local startCameraOffset = vector():set(0, -0.4, 0)
-
-		-- Camera offset when in animIn state
-		local animInCameraOffset = vector():set(0, 0.1, 0)
-
-		local d = vector():set(actorPos):sub(collisionPos)
-		d.y = 0
-		d:normalize()
-		local startCameraPos = vector():mad(collisionPos, d, startCameraDistance)
-		startCameraPos.y = climbPos.y
-		startCameraPos:add(startCameraOffset)
-
-		local animationSpeed = 0.8
-		local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
-		local startTime = time_global()
-		local animationStartTime = 0
-		local animationEndTime = animationData.calculatedTime
-		local endTime = startTime + animationData.calculatedTime / animationSpeed * 1000 
-		local animInTime = 26 / animationData.originalFps
-		local animOutTime = 50 / animationData.originalFps
-		local animRotationOutTime = 4 / animationData.originalFps
-
-		local hudMotionSpeed = 0.82
-		local hudMotionStarted = false		
-
-		-- game.only_allow_movekeys(true)
-		game.set_actor_allow_ladder(false)
-
-		-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
-		nextTick(function()
-			local k = 0
-			local performClimb
-			performClimb = function()
-				try(function()
-					-- If close to animation end - stop and give control to player
-					if k > 0.98 then
-
-						local p = cubicBezier(p1, p2, p3, p4, k)
-						p.y = p.y - camY + 0.07 -- Small offset for better collision handling
-						db.actor:set_actor_direction(-camDirHPB.x)
-						db.actor:set_actor_position(p)
-						level.remove_cam_custom_position_direction()
-						game.stop_hud_motion()
-
-						-- Restore weapons if had
-						if activeWpnId or activeDetectorId then
-							if activeWpnId then
-								local obj = level.object_by_id(activeWpnId)
-								if obj then
-									db.actor:move_to_slot(obj, activeSlot)
-									nextTick(function()
-										db.actor:activate_slot(activeSlot)
-										return true
-									end, 2)
-								end
-							end
-							if activeDetectorId then
-								local obj = level.object_by_id(activeDetectorId)
-								if obj then
-									db.actor:move_to_slot(obj, 9)
-
-									-- Time event for proper animation play
-									CreateTimeEvent("ledge_grabbing", "activate_detector", 0.5, function()
-										obj:switch_state(1)
-										return true
-									end)
-								end
-							end
-						end
-
-						-- game.only_allow_movekeys(false)
-						game.set_actor_allow_ladder(true)
-
-						-- Set flag after some time
-						UnregisterScriptCallback("actor_on_update", performClimb)
-						CreateTimeEvent("ledge_grabbing", "reset", 0.5, function()
-							climbActive = false
-							return true
-						end)
-						return
-					end
-
-					local animTime = (time_global() - startTime) / 1000 * animationSpeed
-
-					-- Get camera params from animation data					
-					local locationX = animationData.curves.locationX
-					local delta, lo, hi = lookup(locationX, animTime)
-					local locationXRes = cubicBezier2D(locationX[lo][1], locationX[lo][2], locationX[lo][3], locationX[lo][4], delta)
-					local animDelta, animLo, animHi = delta, lo, hi
-
-					local locationY = animationData.curves.locationY
-					local delta, lo, hi = lookup(locationY, animTime)
-					local locationYRes = cubicBezier2D(locationY[lo][1], locationY[lo][2], locationY[lo][3], locationY[lo][4], delta)
-
-					local locationZ = animationData.curves.locationZ
-					local delta, lo, hi = lookup(locationZ, animTime)
-					local locationZRes = cubicBezier2D(locationZ[lo][1], locationZ[lo][2], locationZ[lo][3], locationZ[lo][4], delta)
-
-					local rotationX = animationData.curves.rotation_eulerX
-					local delta, lo, hi = lookup(rotationX, animTime * hudMotionSpeed)
-					local rotationXRes = cubicBezier2D(rotationX[lo][1], rotationX[lo][2], rotationX[lo][3], rotationX[lo][4], delta)
-
-					local rotationY = animationData.curves.rotation_eulerY
-					local delta, lo, hi = lookup(rotationY, animTime * hudMotionSpeed)
-					local rotationYRes = cubicBezier2D(rotationY[lo][1], rotationY[lo][2], rotationY[lo][3], rotationY[lo][4], delta)
-
-					local rotationZ = animationData.curves.rotation_eulerZ
-					local delta, lo, hi = lookup(rotationZ, animTime * hudMotionSpeed)
-					local rotationZRes = cubicBezier2D(rotationZ[lo][1], rotationZ[lo][2], rotationZ[lo][3], rotationZ[lo][4], delta)
-
-					local cameraPos = vector():set(
-						startCameraPos.x + locationXRes.y,
-						startCameraPos.y + locationYRes.y,
-						startCameraPos.z + locationZRes.y
-					)
-
-					-- Calculate procedural camera transform
-					k = normalize(time_global(), startTime, endTime)
-					k = math.min(1, k)
-					local cameraPos2 = cubicBezier(p1, p2, p3, p4, demonized_randomizing_functions.CubicEaseInOut(k))
-
-					-- Interpolate between procedural and animation camera in animInTime
-					local animInK = math.min(1, normalize(animTime, 0, animInTime))
-					animInK = demonized_randomizing_functions.QuadraticEaseInOut(animInK)
-					local resultPosition = vecLerp(cameraPos2, cameraPos, animInK)
-					
-					-- Move player with camera then stop it to playerPos
-					local currentPlayerPos = vecLerp(
-						vector():set(
-							resultPosition.x,
-							resultPosition.y - camY,
-							resultPosition.z
-						):sub(animInCameraOffset),
-						playerPos,
-						animInK
-					)					
-
-					-- Reattach camera to player pos and interpolate to calculated resuult
-					-- resultPosition = vecLerp(
-					-- 	vector():set(
-					-- 		currentPlayerPos.x,
-					-- 		currentPlayerPos.y + camY,
-					-- 		currentPlayerPos.z
-					-- 	):add(animInCameraOffset),
-					-- 	resultPosition,
-					-- 	animInK
-					-- )
-
-					-- Calculate position when returning from animation to procedural 
-					local animOutK = clamp(normalize(animTime, animOutTime, animationEndTime), 0, 1)
-					animOutK = demonized_randomizing_functions.QuadraticEaseInOut(animOutK)
-					resultPosition = vecLerp(
-						resultPosition,
-						cameraPos2,
-						animOutK
-					)
-
-					print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
-
-					-- Calculate rotations
-					-- Interpolate look to grab point
-					local dirFromActorPosToGrabPos = vector():set(
-						interPos.x - resultPosition.x,
-						climbPos.y - resultPosition.y,
-						interPos.z - resultPosition.z
-					):normalize()
-					dirFromActorPosToGrabPos = vector():set(
-						camDirHPB.x,
-						dirFromActorPosToGrabPos:getP(),
-						0
-					)
-					local cameraRot = vecLerp(
-						camDirHPB,
-						dirFromActorPosToGrabPos,
-						animInK
-					)
-
-					local animRotationK = clamp(normalize(animTime, animInTime, animOutTime), 0, 1)
-					animRotationK = demonized_randomizing_functions.QuadraticEaseInOut(animRotationK)
-
-					-- Interpolate look to climbPos
-					local dirFromActorPosToClimbPos = vector():set(
-						climbPos.x - resultPosition.x,
-						climbPos.y - resultPosition.y,
-						climbPos.z - resultPosition.z
-					):normalize()
-					dirFromActorPosToClimbPos = vector():set(
-						camDirHPB.x,
-						dirFromActorPosToClimbPos:getP() / 3,
-						0
-					)
-					cameraRot = vecLerp(
-						cameraRot,
-						dirFromActorPosToClimbPos,
-						animRotationK
-					)
-
-					-- Apply additive from prebaked animation
-					cameraRot = vector():set(
-						cameraRot.x + rotationXRes.y,
-						cameraRot.y + rotationYRes.y,
-						cameraRot.z + rotationZRes.y
-					)
-
-					-- Return to initial rotation when returning from animation to procedural
-					cameraRot = vecLerp(
-						cameraRot,
-						vector():set(
-							camDirHPB.x,
-							0,
-							0
-						),
-						animOutK
-					)
-
-					db.actor:set_actor_position(currentPlayerPos, true)
-					db.actor:set_actor_direction(-camDirHPB.x)
-					level.set_cam_custom_position_direction(resultPosition, cameraRot, 1, true, false)
-
-					-- Start hud motion on next tick
-					if not hudMotionStarted then
-						hudMotionStarted = true
-						nextTick(function()
-							game.play_hud_motion(2, "item_anm_ledge_grabbing", "anm_climb", true, animationSpeed * hudMotionSpeed)
-							return true
-						end)
-					end
-				end)
-			end
-
-			RegisterScriptCallback("actor_on_update", performClimb)
-			return true
-		end, 2)		
+	if dik == DIK_keys.DIK_H then
+		tryToClimb()
 	end
 	if dik == DIK_keys.DIK_J then
 		debugMode = not debugMode
 		if not debugMode then
 			reset(nil, true)
 		end
+	end
+	local bind = dik_to_bind(dik)
+	if bind == key_bindings.kJUMP then
+		savedJumpPressedTime = time_global()
+		checkJump(true)
+		RegisterScriptCallback("actor_on_update", checkJump)
 	end
 end
 
