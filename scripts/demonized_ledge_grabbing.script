@@ -230,7 +230,7 @@ end
 
 -- TODO: Fix to make it work with exactly (0, -1, 0)
 function getDownVector()
-	return vector():set(-0.06, -0.998, -0.02)
+	return vector():set(-0.01, -1, -0.01):normalize()
 end
 
 function checkClimbPrecondition()
@@ -244,11 +244,17 @@ function checkLedgeGrabbing()
 
 	if not checkClimbPrecondition() then return reset() end
 
-	local actorPos = db.actor:position()
-	local actorDir = db.actor:direction()
-	if vecSimilar(actorPos, savedActorPos, 0.01) and vecSimilar(actorDir, savedActorDir, 0.01) then return end
-	savedActorPos = actorPos
-	savedActorDir = actorDir
+	local actorPos = vector():set(
+		device().cam_pos.x,
+		db.actor:position().y,
+		device().cam_pos.z
+	)
+	local actorDir = device().cam_dir
+	local realActorPos = db.actor:position()
+	local realActorDir = db.actor:direction()
+	if vecSimilar(realActorPos, savedActorPos, 0.02) and vecSimilar(realActorDir, savedActorDir, 0.02) then return end
+	savedActorPos = realActorPos
+	savedActorDir = realActorDir
 
 	-- Check if player has possibility to initiate climb
 	local collisionPos
@@ -306,25 +312,39 @@ function checkLedgeGrabbing()
 				end
 
 				if flat then
+					local function posCheck(res)
+						-- Player height check on climbPos
+						-- If height is not enough - stop checking next position, assume that you cant move further
+						local ray = demonized_geometry_ray.geometry_ray({
+							ray_range = 1.2,
+							flags = 2,
+							ignore_object = db.actor
+						})
+						local heightRes = ray:get(res.position, vector():set(0,1,0))
+						validCollisionPos = not heightRes.success
+						climbPos = res.position
+						climbNormal = normal
 
-					-- Player height check on climbPos
-					-- If height is not enough - stop checking next position, assume that you cant move further
-					local ray = demonized_geometry_ray.geometry_ray({
-						ray_range = 1.2,
-						flags = 2,
-						ignore_object = db.actor
-					})
-					local heightRes = ray:get(res.position, vector():set(0,1,0))
-					validCollisionPos = not heightRes.success
-					climbPos = res.position
-					climbNormal = normal
+						if debugMode then
+							local p = gizmos.rayLines[j]
+							p.color = validCollisionPos and fcolor():set(0,1,0,1) or fcolor():set(1,0,0,1)
+							for k = j + 1, #gizmos.rayLines do
+								local x = gizmos.rayLines[k]
+								x.visible = false
+							end
+						end
+					end
+					posCheck(res)
 
-					if debugMode then
-						local p = gizmos.rayLines[j]
-						p.color = validCollisionPos and fcolor():set(0,1,0,1) or fcolor():set(1,0,0,1)
-						for k = j + 1, #gizmos.rayLines do
-							local x = gizmos.rayLines[k]
-							x.visible = false
+					-- Advance position a bit further and check it as well for better result
+					-- If successfull - use that, otherwise use  result
+					local pos = vector():mad(actorPos, actorDir, i + 0.05)
+					pos.y = maxY
+					local res = ray:get(pos, dir)
+					if res.success then
+						local flat, normal = isFlat(pos, dir)
+						if normal and flat then
+							posCheck(res)
 						end
 					end
 
@@ -503,7 +523,7 @@ function on_key_press(dik)
 			printf("wall angle %s", math.abs(math.deg(math.acos(normal.y))))
 		end
 	end
-	if dik == DIK_keys.DIK_H and savedClimbPos then		
+	if dik == DIK_keys.DIK_H and savedClimbPos and not climbActive then
 		local activeSlot = db.actor:active_slot()
 		local activeWpn = db.actor:active_item()
 		local activeDetector = db.actor:active_detector()
@@ -546,6 +566,7 @@ function on_key_press(dik)
 			collisionPos.z
 		) 
 
+		-- Adjusted positions by difference from camera
 		local adjustedClimbPos = vector():set(climbPos):add(vector():set(0, camY, 0))
 		local adjustedInterPos = vector():set(interPos):add(vector():set(0, camY, 0))
 		local adjustedCollisionPos = vector():set(collisionPos):add(vector():set(0, camY, 0))
@@ -582,10 +603,11 @@ function on_key_press(dik)
 		local animationStartTime = 0
 		local animationEndTime = animationData.calculatedTime
 		local endTime = startTime + animationData.calculatedTime / animationSpeed * 1000 
-		local animInTime = 30 / animationData.originalFps
+		local animInTime = 26 / animationData.originalFps
 		local animOutTime = 50 / animationData.originalFps
+		local animRotationOutTime = 4 / animationData.originalFps
 
-		local hudMotionSpeed = 0.8
+		local hudMotionSpeed = 0.82
 		local hudMotionStarted = false		
 
 		-- game.only_allow_movekeys(true)
@@ -601,9 +623,9 @@ function on_key_press(dik)
 					if k > 0.98 then
 
 						local p = cubicBezier(p1, p2, p3, p4, k)
-						p.y = p.y - camY + 0.05 -- Small offset for better collision handling
-						db.actor:set_actor_direction(-camDirHPB.x, -camDirHPB.y)
-						db.actor:set_actor_position(p, true)
+						p.y = p.y - camY + 0.07 -- Small offset for better collision handling
+						db.actor:set_actor_direction(-camDirHPB.x)
+						db.actor:set_actor_position(p)
 						level.remove_cam_custom_position_direction()
 						game.stop_hud_motion()
 
@@ -701,15 +723,15 @@ function on_key_press(dik)
 					)					
 
 					-- Reattach camera to player pos and interpolate to calculated resuult
-					resultPosition = vecLerp(
-						vector():set(
-							currentPlayerPos.x,
-							currentPlayerPos.y + camY,
-							currentPlayerPos.z
-						):add(animInCameraOffset),
-						resultPosition,
-						animInK
-					)
+					-- resultPosition = vecLerp(
+					-- 	vector():set(
+					-- 		currentPlayerPos.x,
+					-- 		currentPlayerPos.y + camY,
+					-- 		currentPlayerPos.z
+					-- 	):add(animInCameraOffset),
+					-- 	resultPosition,
+					-- 	animInK
+					-- )
 
 					-- Calculate position when returning from animation to procedural 
 					local animOutK = clamp(normalize(animTime, animOutTime, animationEndTime), 0, 1)
@@ -720,19 +742,61 @@ function on_key_press(dik)
 						animOutK
 					)
 
-					-- print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
+					print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
 
 					-- Calculate rotations
-					local cameraRot = vector():set(
-						camDirHPB.x + rotationXRes.y,
-						camDirHPB.y + rotationYRes.y,
-						camDirHPB.z + rotationZRes.y
+					-- Interpolate look to grab point
+					local dirFromActorPosToGrabPos = vector():set(
+						interPos.x - resultPosition.x,
+						climbPos.y - resultPosition.y,
+						interPos.z - resultPosition.z
+					):normalize()
+					dirFromActorPosToGrabPos = vector():set(
+						camDirHPB.x,
+						dirFromActorPosToGrabPos:getP(),
+						0
+					)
+					local cameraRot = vecLerp(
+						camDirHPB,
+						dirFromActorPosToGrabPos,
+						animInK
+					)
+
+					local animRotationK = clamp(normalize(animTime, animInTime, animOutTime), 0, 1)
+					animRotationK = demonized_randomizing_functions.QuadraticEaseInOut(animRotationK)
+
+					-- Interpolate look to climbPos
+					local dirFromActorPosToClimbPos = vector():set(
+						climbPos.x - resultPosition.x,
+						climbPos.y - resultPosition.y,
+						climbPos.z - resultPosition.z
+					):normalize()
+					dirFromActorPosToClimbPos = vector():set(
+						camDirHPB.x,
+						dirFromActorPosToClimbPos:getP() / 3,
+						0
+					)
+					cameraRot = vecLerp(
+						cameraRot,
+						dirFromActorPosToClimbPos,
+						animRotationK
+					)
+
+					-- Apply additive from prebaked animation
+					cameraRot = vector():set(
+						cameraRot.x + rotationXRes.y,
+						cameraRot.y + rotationYRes.y,
+						cameraRot.z + rotationZRes.y
 					)
 
 					-- Return to initial rotation when returning from animation to procedural
 					cameraRot = vecLerp(
 						cameraRot,
-						camDirHPB,
+						vector():set(
+							camDirHPB.x,
+							0,
+							0
+						),
 						animOutK
 					)
 
