@@ -240,7 +240,7 @@ function checkClimbPrecondition()
 end
 
 function checkLedgeGrabbing()
-	if climbActive then return reset() end
+	if climbActive then return end
 
 	if not checkClimbPrecondition() then return reset() end
 
@@ -535,47 +535,17 @@ function on_key_press(dik)
 		local collisionPos = vector():set(savedCollisionPos)
 		local actorPos = db.actor:position()
 
-		-- TODO: Improve collision pos by additional raycast with very low step
-		local dist = vector():set(climbPos):distance_to_xz(collisionPos)
-		local raySteps = 15
-		local rayStepDistance = dist / raySteps
-		for i = 1, raySteps do
-			local j = rayStepDistance * i
-			local ray = demonized_geometry_ray.geometry_ray({
-				ray_range = climbPos.y - collisionPos.y,
-				flags = 2,
-				ignore_object = db.actor
-			})
-			local dir = vector():set(collisionPos):sub(climbPos)
-			dir.y = 0
-			dir:normalize()
-			local pos = vector():mad(climbPos, dir, j)
-			pos.y = pos.y + 0.05
-
-			dir = getDownVector()
-			local res = ray:get(pos, dir)
-			if res.success then
-				local flat, normal = isFlat(pos, dir)
-				if normal and not flat then
-					collisionPos = vector():set(
-						res.position.x,
-						collisionPos.y,
-						res.position.z
-					)
-					break
-				end
-			else
-				collisionPos = vector():set(
-					res.position.x,
-					collisionPos.y,
-					res.position.z
-				)
-				break
-			end
-		end
-
 		-- Get difference from camera height to position
 		local camY = device().cam_pos.y - actorPos.y
+
+		-- make playerPos during climb so it will stay there during camera anim
+		-- Adjust it to fit animation
+		local playerPos = vector():set(
+			collisionPos.x,
+			climbPos.y - camY,
+			collisionPos.z
+		) 
+
 		local adjustedClimbPos = vector():set(climbPos):add(vector():set(0, camY, 0))
 		local adjustedInterPos = vector():set(interPos):add(vector():set(0, camY, 0))
 		local adjustedCollisionPos = vector():set(collisionPos):add(vector():set(0, camY, 0))
@@ -587,14 +557,6 @@ function on_key_press(dik)
 			camDir:getP(),
 			0
 		)
-
-		-- make playerPos during climb so it will stay there during camera anim
-		-- Adjust it to fit animation
-		local playerPos = vector():set(
-			collisionPos.x,
-			climbPos.y - camY,
-			collisionPos.z
-		) 
 
 		local p1, p2, p3, p4 = getClimbPathEndPoints(adjustedActorPos, adjustedCollisionPos, adjustedInterPos, adjustedClimbPos)
 
@@ -758,7 +720,7 @@ function on_key_press(dik)
 						animOutK
 					)
 
-					print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
+					-- print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
 
 					-- Calculate rotations
 					local cameraRot = vector():set(
