@@ -23,9 +23,9 @@ local idOffset = 0
 local debugMode = true
 local climbTriggerDistance = 1.3
 local maxClimbHeight = 3.2
-local minClimbHeight = 1.5
+local minClimbHeight = 1.42
 local raySteps = 15
-local jumpTriggerTime = 70
+local jumpTriggerTime = 100
 
 -- Postpone on next n tick
 local nextTick = _G.nextTick or function(f, n)
@@ -76,6 +76,11 @@ local function cubicBezier2D(v1, v2, v3, v4, t)
 		(1-t)^3*v1.y + 3*(1-t)^2*t*v2.y + 3*(1-t)*t^2*v3.y + t^3*v4.y,
 		0
 	)
+end
+
+local function mapRangeClamped(inVal, inMin, inMax, outMin, outMax)
+	local k = math.min(1, normalize(inVal, inMin, inMax))
+	return lerp(outMin, outMax, k)
 end
 
 local function array_keys(t, sorted, sort_func)
@@ -492,6 +497,40 @@ function checkLedgeGrabbing()
     savedClimbNormal = climbNormal
 end
 
+-- Animation speed modifier
+-- 50% speed reduction when player is at max weight
+-- Full speed if weight is below half of max walk weight
+function getAnimationSpeedModifier()
+	local maxWeight = db.actor:get_actor_max_walk_weight()
+	local minWeight = maxWeight / 2
+	local weight = db.actor:get_total_weight()
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0, 0.33)
+	k = 1 - k
+	return k
+end
+
+-- Stamina drain modifier
+function getStaminaDrain()
+	local maxWeight = db.actor:get_actor_max_walk_weight()
+	local minWeight = maxWeight / 2
+	local weight = db.actor:get_total_weight()
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.15, 0.8)
+	return k
+end
+
+function getSatietyDrain()
+	local maxWeight = db.actor:get_actor_max_walk_weight()
+	local minWeight = maxWeight / 2
+	local weight = db.actor:get_total_weight()
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.001, 0.005)
+	return k
+end
+
+-- Get modifier for prebaked camera rotations
+function getRotationAnimModifier()
+	return 0.5
+end
+
 function tryToClimb()
 	if not (savedClimbPos and not climbActive) then return end
 
@@ -529,8 +568,6 @@ function tryToClimb()
 	-- Get difference from camera height to position
 	local camY = device().cam_pos.y - actorPos.y
 
-	-- TODO: improve playerPos by shooting a ray in front to check the possible
-
 	-- make playerPos during climb so it will stay there during camera anim
 	-- Adjust it to fit animation
 	local playerPos = vector():set(
@@ -558,7 +595,7 @@ function tryToClimb()
 	local startCameraDistance = 0.4
 
 	-- Camera offset
-	local startCameraOffset = vector():set(0, -0.4, 0)
+	local startCameraOffset = vector():set(0, -0.5, 0)
 
 	-- Camera offset when in animIn state
 	local animInCameraOffset = vector():set(0, 0.1, 0)
@@ -572,7 +609,7 @@ function tryToClimb()
 	-- startCameraPos.y = climbPos.y
 	startCameraPos:add(startCameraOffset)
 
-	local animationSpeed = 0.8
+	local animationSpeed = 0.8 * getAnimationSpeedModifier()
 	local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
 	local startTime = time_global()
 	local animationStartTime = 0
@@ -582,7 +619,13 @@ function tryToClimb()
 	local animOutTime = 50 / animationData.originalFps
 
 	local hudMotionSpeed = 0.78
-	local hudMotionStarted = false		
+	local hudMotionStarted = false	
+
+	local staminaDrain = getStaminaDrain()
+	local staminaDrainPerMs = staminaDrain / (endTime - startTime)
+
+	local satietyDrain = getSatietyDrain()
+	local satietyDrainPerMs = satietyDrain / (endTime - startTime)
 
 	-- game.only_allow_movekeys(true)
 	game.set_actor_allow_ladder(false)
@@ -593,6 +636,7 @@ function tryToClimb()
 		local performClimb
 		performClimb = function()
 			try(function()
+
 				-- If close to animation end - stop and give control to player
 				if k > 0.98 then
 
@@ -758,9 +802,9 @@ function tryToClimb()
 
 				-- Apply additive from prebaked animation
 				cameraRot = vector():set(
-					cameraRot.x + rotationXRes.y / 2,
-					cameraRot.y + rotationYRes.y / 2,
-					cameraRot.z + rotationZRes.y / 2
+					cameraRot.x + rotationXRes.y * getRotationAnimModifier(),
+					cameraRot.y + rotationYRes.y * getRotationAnimModifier(),
+					cameraRot.z + rotationZRes.y * getRotationAnimModifier()
 				)
 
 				-- Return to initial rotation when returning from animation to procedural
@@ -786,6 +830,14 @@ function tryToClimb()
 						return true
 					end)
 				end
+
+				-- Drain stamina
+				local staminaK = demonized_randomizing_functions.QuadraticEaseIn(k) + 1
+				db.actor:change_power(-staminaDrainPerMs * staminaK * device().time_delta)
+
+				-- Drain satiety
+				local satietyK = k + 1
+				db.actor:change_satiety(-satietyDrainPerMs * satietyK * device().time_delta)
 			end)
 		end
 
@@ -796,11 +848,9 @@ function tryToClimb()
 end
 
 function checkJump(pressed)
-
 	if pressed == true then
-
 		-- If savedClimbPos is similar to camera height or below it - init climb immediately
-		if savedClimbPos and (savedClimbPos.y < device().cam_pos.y or similar(savedClimbPos.y, device().cam_pos.y, 0.15)) then
+		if savedClimbPos and (savedClimbPos.y < device().cam_pos.y or similar(savedClimbPos.y, device().cam_pos.y, 0.3)) then
 			if tryToClimb() then
 				UnregisterScriptCallback("actor_on_update", checkJump)
 			end
