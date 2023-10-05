@@ -20,9 +20,9 @@ local id = 69000
 local idOffset = 0
 
 -- Settings
-local debugMode = true
+local debugMode = false
 local climbTriggerDistance = 1.3
-local maxClimbHeight = 3.2
+local maxClimbHeight = 2.5
 local minClimbHeight = 1.42
 local raySteps = 15
 local jumpTriggerTime = 100
@@ -187,7 +187,9 @@ function actor_on_first_update()
 		gizmos.pathLines[i] = debug_render.add_object(id + idOffset, DBG_ScriptObject.line):cast_dbg_line()
 		idOffset = idOffset + 1
 	end
-	RegisterScriptCallback("actor_on_update", function() try(checkLedgeGrabbing) end)
+
+	reset(nil, true)
+	RegisterScriptCallback("actor_on_update", checkLedgeGrabbing)
 end
 
 function reset(gizmosArr, force)
@@ -497,13 +499,18 @@ function checkLedgeGrabbing()
     savedClimbNormal = climbNormal
 end
 
+function getActorWeights()
+	local maxWeight = db.actor:get_actor_max_walk_weight()
+	local minWeight = maxWeight / 2
+	local weight = db.actor:get_total_weight()
+	return weight, minWeight, maxWeight
+end
+
 -- Animation speed modifier
 -- 50% speed reduction when player is at max weight
 -- Full speed if weight is below half of max walk weight
 function getAnimationSpeedModifier()
-	local maxWeight = db.actor:get_actor_max_walk_weight()
-	local minWeight = maxWeight / 2
-	local weight = db.actor:get_total_weight()
+	local weight, minWeight, maxWeight = getActorWeights()
 	local k = mapRangeClamped(weight, minWeight, maxWeight, 0, 0.33)
 	k = 1 - k
 	return k
@@ -511,17 +518,13 @@ end
 
 -- Stamina drain modifier
 function getStaminaDrain()
-	local maxWeight = db.actor:get_actor_max_walk_weight()
-	local minWeight = maxWeight / 2
-	local weight = db.actor:get_total_weight()
+	local weight, minWeight, maxWeight = getActorWeights()
 	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.15, 0.8)
 	return k
 end
 
 function getSatietyDrain()
-	local maxWeight = db.actor:get_actor_max_walk_weight()
-	local minWeight = maxWeight / 2
-	local weight = db.actor:get_total_weight()
+	local weight, minWeight, maxWeight = getActorWeights()
 	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.001, 0.005)
 	return k
 end
@@ -635,210 +638,207 @@ function tryToClimb()
 		local k = 0
 		local performClimb
 		performClimb = function()
-			try(function()
+			-- If close to animation end - stop and give control to player
+			if k > 0.98 then
 
-				-- If close to animation end - stop and give control to player
-				if k > 0.98 then
+				local p = cubicBezier(p1, p2, p3, p4, k)
+				p.y = p.y - camY + 0.07 -- Small offset for better collision handling
+				db.actor:set_actor_direction(-camDirHPB.x)
+				db.actor:set_actor_position(p)
+				level.remove_cam_custom_position_direction()
+				game.stop_hud_motion()
 
-					local p = cubicBezier(p1, p2, p3, p4, k)
-					p.y = p.y - camY + 0.07 -- Small offset for better collision handling
-					db.actor:set_actor_direction(-camDirHPB.x)
-					db.actor:set_actor_position(p)
-					level.remove_cam_custom_position_direction()
-					game.stop_hud_motion()
-
-					-- Restore weapons if had
-					if activeWpnId or activeDetectorId then
-						if activeWpnId then
-							local obj = level.object_by_id(activeWpnId)
-							if obj then
-								db.actor:move_to_slot(obj, activeSlot)
-								nextTick(function()
-									db.actor:activate_slot(activeSlot)
-									return true
-								end, 2)
-							end
-						end
-						if activeDetectorId then
-							local obj = level.object_by_id(activeDetectorId)
-							if obj then
-								db.actor:move_to_slot(obj, 9)
-
-								-- Time event for proper animation play
-								CreateTimeEvent("ledge_grabbing", "activate_detector", 0.5, function()
-									obj:switch_state(1)
-									return true
-								end)
-							end
+				-- Restore weapons if had
+				if activeWpnId or activeDetectorId then
+					if activeWpnId then
+						local obj = level.object_by_id(activeWpnId)
+						if obj then
+							db.actor:move_to_slot(obj, activeSlot)
+							nextTick(function()
+								db.actor:activate_slot(activeSlot)
+								return true
+							end, 2)
 						end
 					end
+					if activeDetectorId then
+						local obj = level.object_by_id(activeDetectorId)
+						if obj then
+							db.actor:move_to_slot(obj, 9)
 
-					-- game.only_allow_movekeys(false)
-					game.set_actor_allow_ladder(true)
-
-					-- Set flag after some time
-					UnregisterScriptCallback("actor_on_update", performClimb)
-					CreateTimeEvent("ledge_grabbing", "reset", 0.5, function()
-						climbActive = false
-						return true
-					end)
-					return
+							-- Time event for proper animation play
+							CreateTimeEvent("ledge_grabbing", "activate_detector", 0.5, function()
+								obj:switch_state(1)
+								return true
+							end)
+						end
+					end
 				end
 
-				local animTime = (time_global() - startTime) / 1000 * animationSpeed
+				-- game.only_allow_movekeys(false)
+				game.set_actor_allow_ladder(true)
 
-				-- Get camera params from animation data					
-				local locationX = animationData.curves.locationX
-				local delta, lo, hi = lookup(locationX, animTime)
-				local locationXRes = cubicBezier2D(locationX[lo][1], locationX[lo][2], locationX[lo][3], locationX[lo][4], delta)
-				local animDelta, animLo, animHi = delta, lo, hi
+				-- Set flag after some time
+				UnregisterScriptCallback("actor_on_update", performClimb)
+				CreateTimeEvent("ledge_grabbing", "reset", 0.5, function()
+					climbActive = false
+					return true
+				end)
+				return
+			end
 
-				local locationY = animationData.curves.locationY
-				local delta, lo, hi = lookup(locationY, animTime)
-				local locationYRes = cubicBezier2D(locationY[lo][1], locationY[lo][2], locationY[lo][3], locationY[lo][4], delta)
+			local animTime = (time_global() - startTime) / 1000 * animationSpeed
 
-				local locationZ = animationData.curves.locationZ
-				local delta, lo, hi = lookup(locationZ, animTime)
-				local locationZRes = cubicBezier2D(locationZ[lo][1], locationZ[lo][2], locationZ[lo][3], locationZ[lo][4], delta)
+			-- Get camera params from animation data					
+			local locationX = animationData.curves.locationX
+			local delta, lo, hi = lookup(locationX, animTime)
+			local locationXRes = cubicBezier2D(locationX[lo][1], locationX[lo][2], locationX[lo][3], locationX[lo][4], delta)
+			local animDelta, animLo, animHi = delta, lo, hi
 
-				local rotationX = animationData.curves.rotation_eulerX
-				local delta, lo, hi = lookup(rotationX, animTime * hudMotionSpeed)
-				local rotationXRes = cubicBezier2D(rotationX[lo][1], rotationX[lo][2], rotationX[lo][3], rotationX[lo][4], delta)
+			local locationY = animationData.curves.locationY
+			local delta, lo, hi = lookup(locationY, animTime)
+			local locationYRes = cubicBezier2D(locationY[lo][1], locationY[lo][2], locationY[lo][3], locationY[lo][4], delta)
 
-				local rotationY = animationData.curves.rotation_eulerY
-				local delta, lo, hi = lookup(rotationY, animTime * hudMotionSpeed)
-				local rotationYRes = cubicBezier2D(rotationY[lo][1], rotationY[lo][2], rotationY[lo][3], rotationY[lo][4], delta)
+			local locationZ = animationData.curves.locationZ
+			local delta, lo, hi = lookup(locationZ, animTime)
+			local locationZRes = cubicBezier2D(locationZ[lo][1], locationZ[lo][2], locationZ[lo][3], locationZ[lo][4], delta)
 
-				local rotationZ = animationData.curves.rotation_eulerZ
-				local delta, lo, hi = lookup(rotationZ, animTime * hudMotionSpeed)
-				local rotationZRes = cubicBezier2D(rotationZ[lo][1], rotationZ[lo][2], rotationZ[lo][3], rotationZ[lo][4], delta)
+			local rotationX = animationData.curves.rotation_eulerX
+			local delta, lo, hi = lookup(rotationX, animTime * hudMotionSpeed)
+			local rotationXRes = cubicBezier2D(rotationX[lo][1], rotationX[lo][2], rotationX[lo][3], rotationX[lo][4], delta)
 
-				local cameraPos = vector():set(
-					startCameraPos.x + locationXRes.y,
-					startCameraPos.y + locationYRes.y,
-					startCameraPos.z + locationZRes.y
-				)
+			local rotationY = animationData.curves.rotation_eulerY
+			local delta, lo, hi = lookup(rotationY, animTime * hudMotionSpeed)
+			local rotationYRes = cubicBezier2D(rotationY[lo][1], rotationY[lo][2], rotationY[lo][3], rotationY[lo][4], delta)
 
-				-- Calculate procedural camera transform
-				k = normalize(time_global(), startTime, endTime)
-				k = math.min(1, k)
-				local cameraPos2 = cubicBezier(p1, p2, p3, p4, demonized_randomizing_functions.CubicEaseInOut(k))
+			local rotationZ = animationData.curves.rotation_eulerZ
+			local delta, lo, hi = lookup(rotationZ, animTime * hudMotionSpeed)
+			local rotationZRes = cubicBezier2D(rotationZ[lo][1], rotationZ[lo][2], rotationZ[lo][3], rotationZ[lo][4], delta)
 
-				-- Interpolate between procedural and animation camera in animInTime
-				local animInK = math.min(1, normalize(animTime, 0, animInTime))
-				animInK = demonized_randomizing_functions.QuadraticEaseInOut(animInK)
-				local resultPosition = vecLerp(cameraPos2, cameraPos, animInK)
-				
-				-- Move player with camera then stop it to playerPos
-				local currentPlayerPos = vecLerp(
-					vector():set(
-						resultPosition.x,
-						resultPosition.y - camY,
-						resultPosition.z
-					):sub(animInCameraOffset),
-					playerPos,
-					animInK
-				)					
+			local cameraPos = vector():set(
+				startCameraPos.x + locationXRes.y,
+				startCameraPos.y + locationYRes.y,
+				startCameraPos.z + locationZRes.y
+			)
 
-				-- Reattach camera to player pos and interpolate to calculated resuult
-				-- resultPosition = vecLerp(
-				-- 	vector():set(
-				-- 		currentPlayerPos.x,
-				-- 		currentPlayerPos.y + camY,
-				-- 		currentPlayerPos.z
-				-- 	):add(animInCameraOffset),
-				-- 	resultPosition,
-				-- 	animInK
-				-- )
+			-- Calculate procedural camera transform
+			k = normalize(time_global(), startTime, endTime)
+			k = math.min(1, k)
+			local cameraPos2 = cubicBezier(p1, p2, p3, p4, demonized_randomizing_functions.CubicEaseInOut(k))
 
-				-- Calculate position when returning from animation to procedural 
-				local animOutK = clamp(normalize(animTime, animOutTime, animationEndTime), 0, 1)
-				animOutK = demonized_randomizing_functions.QuadraticEaseInOut(animOutK)
-				resultPosition = vecLerp(
-					resultPosition,
-					cameraPos2,
-					animOutK
-				)
+			-- Interpolate between procedural and animation camera in animInTime
+			local animInK = math.min(1, normalize(animTime, 0, animInTime))
+			animInK = demonized_randomizing_functions.QuadraticEaseInOut(animInK)
+			local resultPosition = vecLerp(cameraPos2, cameraPos, animInK)
+			
+			-- Move player with camera then stop it to playerPos
+			local currentPlayerPos = vecLerp(
+				vector():set(
+					resultPosition.x,
+					resultPosition.y - camY,
+					resultPosition.z
+				):sub(animInCameraOffset),
+				playerPos,
+				animInK
+			)					
 
-				-- print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
+			-- Reattach camera to player pos and interpolate to calculated resuult
+			-- resultPosition = vecLerp(
+			-- 	vector():set(
+			-- 		currentPlayerPos.x,
+			-- 		currentPlayerPos.y + camY,
+			-- 		currentPlayerPos.z
+			-- 	):add(animInCameraOffset),
+			-- 	resultPosition,
+			-- 	animInK
+			-- )
 
-				-- Calculate rotations
-				-- Interpolate look to grab point
-				local dirFromActorPosToGrabPos = vector():set(
-					interPos.x - resultPosition.x,
-					climbPos.y - resultPosition.y,
-					interPos.z - resultPosition.z
-				):normalize()
-				dirFromActorPosToGrabPos = vector():set(
+			-- Calculate position when returning from animation to procedural 
+			local animOutK = clamp(normalize(animTime, animOutTime, animationEndTime), 0, 1)
+			animOutK = demonized_randomizing_functions.QuadraticEaseInOut(animOutK)
+			resultPosition = vecLerp(
+				resultPosition,
+				cameraPos2,
+				animOutK
+			)
+
+			-- print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
+
+			-- Calculate rotations
+			-- Interpolate look to grab point
+			local dirFromActorPosToGrabPos = vector():set(
+				interPos.x - resultPosition.x,
+				climbPos.y - resultPosition.y,
+				interPos.z - resultPosition.z
+			):normalize()
+			dirFromActorPosToGrabPos = vector():set(
+				camDirHPB.x,
+				dirFromActorPosToGrabPos:getP(),
+				0
+			)
+			local cameraRot = vecLerp(
+				camDirHPB,
+				dirFromActorPosToGrabPos,
+				animInK
+			)
+
+			local animRotationK = clamp(normalize(animTime, animInTime, animOutTime), 0, 1)
+			animRotationK = demonized_randomizing_functions.QuadraticEaseInOut(animRotationK)
+
+			-- Interpolate look to climbPos
+			local dirFromActorPosToClimbPos = vector():set(
+				climbPos.x - resultPosition.x,
+				climbPos.y - resultPosition.y,
+				climbPos.z - resultPosition.z
+			):normalize()
+			dirFromActorPosToClimbPos = vector():set(
+				camDirHPB.x,
+				dirFromActorPosToClimbPos:getP() / 4,
+				0
+			)
+			cameraRot = vecLerp(
+				cameraRot,
+				dirFromActorPosToClimbPos,
+				animRotationK
+			)
+
+			-- Apply additive from prebaked animation
+			cameraRot = vector():set(
+				cameraRot.x + rotationXRes.y * getRotationAnimModifier(),
+				cameraRot.y + rotationYRes.y * getRotationAnimModifier(),
+				cameraRot.z + rotationZRes.y * getRotationAnimModifier()
+			)
+
+			-- Return to initial rotation when returning from animation to procedural
+			cameraRot = vecLerp(
+				cameraRot,
+				vector():set(
 					camDirHPB.x,
-					dirFromActorPosToGrabPos:getP(),
+					0,
 					0
-				)
-				local cameraRot = vecLerp(
-					camDirHPB,
-					dirFromActorPosToGrabPos,
-					animInK
-				)
+				),
+				animOutK
+			)
 
-				local animRotationK = clamp(normalize(animTime, animInTime, animOutTime), 0, 1)
-				animRotationK = demonized_randomizing_functions.QuadraticEaseInOut(animRotationK)
+			db.actor:set_actor_position(currentPlayerPos, true)
+			db.actor:set_actor_direction(-camDirHPB.x)
+			level.set_cam_custom_position_direction(resultPosition, cameraRot, 1, true, false)
 
-				-- Interpolate look to climbPos
-				local dirFromActorPosToClimbPos = vector():set(
-					climbPos.x - resultPosition.x,
-					climbPos.y - resultPosition.y,
-					climbPos.z - resultPosition.z
-				):normalize()
-				dirFromActorPosToClimbPos = vector():set(
-					camDirHPB.x,
-					dirFromActorPosToClimbPos:getP() / 4,
-					0
-				)
-				cameraRot = vecLerp(
-					cameraRot,
-					dirFromActorPosToClimbPos,
-					animRotationK
-				)
+			-- Start hud motion on next tick
+			if not hudMotionStarted then
+				hudMotionStarted = true
+				nextTick(function()
+					game.play_hud_motion(2, "item_anm_ledge_grabbing", "anm_climb", true, animationSpeed * hudMotionSpeed)
+					return true
+				end)
+			end
 
-				-- Apply additive from prebaked animation
-				cameraRot = vector():set(
-					cameraRot.x + rotationXRes.y * getRotationAnimModifier(),
-					cameraRot.y + rotationYRes.y * getRotationAnimModifier(),
-					cameraRot.z + rotationZRes.y * getRotationAnimModifier()
-				)
+			-- Drain stamina
+			local staminaK = demonized_randomizing_functions.QuadraticEaseIn(k) + 1
+			db.actor:change_power(-staminaDrainPerMs * staminaK * device().time_delta)
 
-				-- Return to initial rotation when returning from animation to procedural
-				cameraRot = vecLerp(
-					cameraRot,
-					vector():set(
-						camDirHPB.x,
-						0,
-						0
-					),
-					animOutK
-				)
-
-				db.actor:set_actor_position(currentPlayerPos, true)
-				db.actor:set_actor_direction(-camDirHPB.x)
-				level.set_cam_custom_position_direction(resultPosition, cameraRot, 1, true, false)
-
-				-- Start hud motion on next tick
-				if not hudMotionStarted then
-					hudMotionStarted = true
-					nextTick(function()
-						game.play_hud_motion(2, "item_anm_ledge_grabbing", "anm_climb", true, animationSpeed * hudMotionSpeed)
-						return true
-					end)
-				end
-
-				-- Drain stamina
-				local staminaK = demonized_randomizing_functions.QuadraticEaseIn(k) + 1
-				db.actor:change_power(-staminaDrainPerMs * staminaK * device().time_delta)
-
-				-- Drain satiety
-				local satietyK = k + 1
-				db.actor:change_satiety(-satietyDrainPerMs * satietyK * device().time_delta)
-			end)
+			-- Drain satiety
+			local satietyK = k + 1
+			db.actor:change_satiety(-satietyDrainPerMs * satietyK * device().time_delta)
 		end
 
 		RegisterScriptCallback("actor_on_update", performClimb)
