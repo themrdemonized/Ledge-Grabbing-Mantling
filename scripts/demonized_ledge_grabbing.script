@@ -741,17 +741,6 @@ function tryToClimb()
 				animInK
 			)					
 
-			-- Reattach camera to player pos and interpolate to calculated resuult
-			-- resultPosition = vecLerp(
-			-- 	vector():set(
-			-- 		currentPlayerPos.x,
-			-- 		currentPlayerPos.y + camY,
-			-- 		currentPlayerPos.z
-			-- 	):add(animInCameraOffset),
-			-- 	resultPosition,
-			-- 	animInK
-			-- )
-
 			-- Calculate position when returning from animation to procedural 
 			local animOutK = clamp(normalize(animTime, animOutTime, animationEndTime), 0, 1)
 			animOutK = demonized_randomizing_functions.QuadraticEaseInOut(animOutK)
@@ -875,38 +864,6 @@ function checkJump(pressed)
 end
 
 function on_key_press(dik)
-	if dik == DIK_keys.DIK_G then
-		local ray = demonized_geometry_ray.geometry_ray({
-			ray_range = 5,
-			flags = 2,
-			ignore_object = db.actor
-		})
-		local pos = device().cam_pos
-		local dir = device().cam_dir
-		printf("%s", dir)
-		local res = ray:get(pos, dir)
-		if res.success then
-			-- printf("material_name %s", res.result.material_name)
-			-- printf("material_flags %s", res.result.material_flags)
-			-- printf("material_phfriction %s", res.result.material_phfriction)
-			-- printf("material_phdamping %s", res.result.material_phdamping)
-			-- printf("material_phspring %s", res.result.material_phspring)
-			-- printf("material_phbounce_start_velocity %s", res.result.material_phbounce_start_velocity)
-			-- printf("material_phbouncing %s", res.result.material_phbouncing)
-			-- printf("material_flotation_factor %s", res.result.material_flotation_factor)
-			-- printf("material_shoot_factor %s", res.result.material_shoot_factor)
-			-- printf("material_shoot_factor_mp %s", res.result.material_shoot_factor_mp)
-			-- printf("material_bounce_damage_factor %s", res.result.material_bounce_damage_factor)
-			-- printf("material_injurious_speed %s", res.result.material_injurious_speed)
-			-- printf("material_vis_transparency_factor %s", res.result.material_vis_transparency_factor)
-			-- printf("material_snd_occlusion_factor %s", res.result.material_snd_occlusion_factor)
-			-- printf("material_density_factor %s", res.result.material_density_factor)
-			-- print_r(ray:getMaterialFlags())
-
-			local normal = demonized_geometry_ray.get_surface_normal(pos, dir, {flags=2}, {visualize_time=1000})
-			printf("wall angle %s", math.abs(math.deg(math.acos(normal.y))))
-		end
-	end
 	if dik == DIK_keys.DIK_H then
 		tryToClimb()
 	end
