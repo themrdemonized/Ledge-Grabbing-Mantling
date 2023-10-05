@@ -24,8 +24,9 @@ local debugMode = false
 local climbTriggerDistance = 1.3
 local maxClimbHeight = 2.5
 local minClimbHeight = 1.42
-local raySteps = 15
-local jumpTriggerTime = 100
+
+local drf = demonized_randomizing_functions
+local dgr = demonized_geometry_ray
 
 -- Postpone on next n tick
 local nextTick = _G.nextTick or function(f, n)
@@ -141,28 +142,29 @@ local function lookup(t, key, tkeys)
     return delta, lo, hi
 end
 
-function isWall(position, direction, targetAngle)
-	targetAngle = targetAngle or 10
-	local normal = demonized_geometry_ray.get_surface_normal(
-		position,
-		direction
-	)
-	if not normal then return end
 
-	local angle = math.abs(math.deg(math.asin(normal.y)))
-    return angle < targetAngle, normal
+-- MCM
+function load_defaults()
+	local t = {}
+	local op = demonized_ledge_grabbing_mcm.op
+	for i, v in ipairs(op.gr) do
+		if v.def ~= nil then
+			t[v.id] = v.def
+		end
+	end
+	return t
 end
 
-function isFlat(position, direction, targetAngle)
-	targetAngle = targetAngle or 20
-	local normal = demonized_geometry_ray.get_surface_normal(
-		position,
-		direction
-	)
-	if not normal then return end
+settings = load_defaults()
 
-	local angle = math.abs(math.deg(math.acos(normal.y)))
-    return angle < targetAngle, normal
+function load_settings()
+	settings = load_defaults()
+	if ui_mcm then
+		for k, v in pairs(settings) do
+			settings[k] = ui_mcm.get("demonized_ledge_grabbing/" .. k)
+		end
+	end
+	return settings
 end
 
 function actor_on_first_update()
@@ -225,6 +227,30 @@ function reset(gizmosArr, force)
 	savedClimbPos = nil
 end
 
+function isWall(position, direction, targetAngle)
+	targetAngle = targetAngle or 10
+	local normal = dgr.get_surface_normal(
+		position,
+		direction
+	)
+	if not normal then return end
+
+	local angle = math.abs(math.deg(math.asin(normal.y)))
+    return angle < targetAngle, normal
+end
+
+function isFlat(position, direction, targetAngle)
+	targetAngle = targetAngle or 23
+	local normal = dgr.get_surface_normal(
+		position,
+		direction
+	)
+	if not normal then return end
+
+	local angle = math.abs(math.deg(math.acos(normal.y)))
+    return angle < targetAngle, normal
+end
+
 function getClimbPathEndPoints(actorPos, collisionPos, interPos, climbPos)
 	local p1 = actorPos
 	local p2 = vector():set(interPos.x, actorPos.y, interPos.z)
@@ -250,9 +276,8 @@ end
 
 function checkLedgeGrabbing()
 	if climbActive then return end
-
+	if not settings.enable then return reset() end
 	if not checkClimbPrecondition() then return reset() end
-
 	local actorPos = vector():set(
 		device().cam_pos.x,
 		db.actor:position().y,
@@ -289,10 +314,10 @@ function checkLedgeGrabbing()
 	-- Then check if found surface is flat
 	-- If all succeeds - found a point to climb to
 	-- Collision point will be the previous ray result from climb point, it will determine a wall
-	local rayStepDistance = climbTriggerDistance / raySteps
-	for j = 1, raySteps do
+	local rayStepDistance = climbTriggerDistance / settings.raySteps
+	for j = 1, settings.raySteps do
 		local i = rayStepDistance * j
-		local ray = demonized_geometry_ray.geometry_ray({
+		local ray = dgr.geometry_ray({
 			ray_range = rayRange,
 			flags = 2,
 			ignore_object = db.actor
@@ -324,7 +349,7 @@ function checkLedgeGrabbing()
 					local function posCheck(res)
 						-- Player height check on climbPos
 						-- If height is not enough - stop checking next position, assume that you cant move further
-						local ray = demonized_geometry_ray.geometry_ray({
+						local ray = dgr.geometry_ray({
 							ray_range = 1.2,
 							flags = 2,
 							ignore_object = db.actor
@@ -464,7 +489,7 @@ function checkLedgeGrabbing()
 
     -- Collision check for climb path - ray cast to interPos
     local posToInterVec = vector():set(interPos):sub(actorPos)
-    local collisionCheckRay = demonized_geometry_ray.geometry_ray({
+    local collisionCheckRay = dgr.geometry_ray({
     	ray_range = posToInterVec:magnitude(),
 		flags = 2,
 		ignore_object = db.actor
@@ -573,11 +598,16 @@ function tryToClimb()
 
 	-- make playerPos during climb so it will stay there during camera anim
 	-- Adjust it to fit animation
+	local playerPosOffset = 0.03
+	local d = vector():set(collisionPos):sub(climbPos)
+	d.y = 0
+	d:normalize()
 	local playerPos = vector():set(
 		collisionPos.x,
 		climbPos.y - camY,
 		collisionPos.z
 	) 
+	playerPos:mad(d, playerPosOffset)
 
 	-- Adjusted positions by difference from camera
 	local adjustedClimbPos = vector():set(climbPos):add(vector():set(0, camY, 0))
@@ -723,11 +753,11 @@ function tryToClimb()
 			-- Calculate procedural camera transform
 			k = normalize(time_global(), startTime, endTime)
 			k = math.min(1, k)
-			local cameraPos2 = cubicBezier(p1, p2, p3, p4, demonized_randomizing_functions.CubicEaseInOut(k))
+			local cameraPos2 = cubicBezier(p1, p2, p3, p4, drf.CubicEaseInOut(k))
 
 			-- Interpolate between procedural and animation camera in animInTime
 			local animInK = math.min(1, normalize(animTime, 0, animInTime))
-			animInK = demonized_randomizing_functions.QuadraticEaseInOut(animInK)
+			animInK = drf.QuadraticEaseInOut(animInK)
 			local resultPosition = vecLerp(cameraPos2, cameraPos, animInK)
 			
 			-- Move player with camera then stop it to playerPos
@@ -743,7 +773,7 @@ function tryToClimb()
 
 			-- Calculate position when returning from animation to procedural 
 			local animOutK = clamp(normalize(animTime, animOutTime, animationEndTime), 0, 1)
-			animOutK = demonized_randomizing_functions.QuadraticEaseInOut(animOutK)
+			animOutK = drf.QuadraticEaseInOut(animOutK)
 			resultPosition = vecLerp(
 				resultPosition,
 				cameraPos2,
@@ -771,7 +801,7 @@ function tryToClimb()
 			)
 
 			local animRotationK = clamp(normalize(animTime, animInTime, animOutTime), 0, 1)
-			animRotationK = demonized_randomizing_functions.QuadraticEaseInOut(animRotationK)
+			animRotationK = drf.QuadraticEaseInOut(animRotationK)
 
 			-- Interpolate look to climbPos
 			local dirFromActorPosToClimbPos = vector():set(
@@ -822,7 +852,7 @@ function tryToClimb()
 			end
 
 			-- Drain stamina
-			local staminaK = demonized_randomizing_functions.QuadraticEaseIn(k) + 1
+			local staminaK = drf.QuadraticEaseIn(k) + 1
 			db.actor:change_power(-staminaDrainPerMs * staminaK * device().time_delta)
 
 			-- Drain satiety
@@ -839,7 +869,7 @@ end
 function checkJump(pressed)
 	if pressed == true then
 		-- If savedClimbPos is similar to camera height or below it - init climb immediately
-		if savedClimbPos and (savedClimbPos.y < device().cam_pos.y or similar(savedClimbPos.y, device().cam_pos.y, 0.3)) then
+		if savedClimbPos and (savedClimbPos.y < device().cam_pos.y or similar(savedClimbPos.y, device().cam_pos.y, 0.35)) then
 			if tryToClimb() then
 				UnregisterScriptCallback("actor_on_update", checkJump)
 			end
@@ -852,7 +882,7 @@ function checkJump(pressed)
 		end
 
 		-- Otherwise try after sometime
-		if time_global() - savedJumpPressedTime > jumpTriggerTime then
+		if time_global() - savedJumpPressedTime > settings.jumpTriggerTime then
 			if tryToClimb() then
 				UnregisterScriptCallback("actor_on_update", checkJump)
 				return
@@ -885,4 +915,6 @@ function on_game_start()
 	assert(level.set_cam_custom_position_direction, "[Ledge Grabbing] Modded Exes are required for mod to work, download from https://github.com/themrdemonized/STALKER-Anomaly-modded-exes")
 	RegisterScriptCallback("on_key_press", on_key_press)
 	RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+	RegisterScriptCallback("actor_on_first_update", load_settings)
+	RegisterScriptCallback("on_option_change", load_settings)
 end

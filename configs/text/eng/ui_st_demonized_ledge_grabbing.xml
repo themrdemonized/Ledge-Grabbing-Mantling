@@ -1,0 +1,40 @@
+
+<!--
+    Ledge Grabbing
+    Generated with AnomalyModCreator
+-->
+
+<?xml version="1.0" encoding="windows-1251"?>
+
+<!-- 
+	MCM
+-->
+<string_table>
+
+	<string id="ui_mcm_ledge_grabbing_title">
+		<text>Ledge Grabbing</text>
+	</string>
+	<string id="ui_mcm_menu_demonized_ledge_grabbing">
+		<text>Ledge Grabbing</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_enable">
+		<text>Enable</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_raySteps">
+		<text>Ledge Grabbing Accuracy</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_raySteps_desc">
+		<text>Bigger number - better detection and position for grabbing at the cost of slight performance hit</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_jumpTriggerTime">
+		<text>Time to Hold Jump To Trigger</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_jumpTriggerTime_desc">
+		<text>If you hold jump for more than this time, the ledge grabbing will be activated</text>
+	</string>
+
+</string_table>
+                        
