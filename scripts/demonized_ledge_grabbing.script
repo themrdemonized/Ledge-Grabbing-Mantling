@@ -265,7 +265,12 @@ end
 
 -- TODO: Fix to make it work with exactly (0, -1, 0)
 function getDownVector()
-	return vector():set(-0.01, -1, -0.01):normalize()
+	local d = device().cam_dir
+	d.y = 0
+	d:normalize()
+	d.y = -100
+	d:normalize()
+	return d
 end
 
 function checkClimbPrecondition()
@@ -350,7 +355,7 @@ function checkLedgeGrabbing()
 						-- Player height check on climbPos
 						-- If height is not enough - stop checking next position, assume that you cant move further
 						local ray = dgr.geometry_ray({
-							ray_range = 1.2,
+							ray_range = 1.4,
 							flags = 2,
 							ignore_object = db.actor
 						})
@@ -562,31 +567,21 @@ end
 function tryToClimb()
 	if not (savedClimbPos and not climbActive) then return end
 
-	local activeSlot = db.actor:active_slot()
-	local activeWpn = db.actor:active_item()
-	local activeDetector = db.actor:active_detector()
-	local activeWpnId
-	local activeDetectorId
-	if activeWpn or activeDetector then
-		if activeWpn then
-			db.actor:move_to_ruck(activeWpn)
-			activeWpnId = activeWpn:id()
-		end
-		if activeDetector then
-			db.actor:move_to_ruck(activeDetector)
-			activeDetectorId = activeDetector:id()
-		end	
-	end
+	-- Read animation data and set params
+	local animationSpeed = 0.8 * getAnimationSpeedModifier()
+	local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
+	local startTime = time_global()
+	local animationStartTime = 0
+	local animationEndTime = animationData.calculatedTime
+	local endTime = startTime + animationData.calculatedTime / animationSpeed * 1000 
+	local animInTime = 26 / animationData.originalFps
+	local animOutTime = 50 / animationData.originalFps
 
-	-- Uncrouch if was crouched
-	if IsMoveState("mcCrouch") then
-		if (get_console():get_bool("crouch_toggle")) then
-			level.press_action(bind_to_dik(key_bindings.kCROUCH))
-		else
-			level.release_action(bind_to_dik(key_bindings.kCROUCH))
-		end
-	end
+	-- Adjust hud motion
+	local hudMotionSpeed = 0.78
+	local hudMotionStarted = false	
 
+	-- Get positions
 	climbActive = true
 	local climbPos = vector():set(savedClimbPos)
 	local interPos = vector():set(savedInterPos)
@@ -598,7 +593,7 @@ function tryToClimb()
 
 	-- make playerPos during climb so it will stay there during camera anim
 	-- Adjust it to fit animation
-	local playerPosOffset = 0.03
+	local playerPosOffset = 0.04
 	local d = vector():set(collisionPos):sub(climbPos)
 	d.y = 0
 	d:normalize()
@@ -642,23 +637,38 @@ function tryToClimb()
 	-- startCameraPos.y = climbPos.y
 	startCameraPos:add(startCameraOffset)
 
-	local animationSpeed = 0.8 * getAnimationSpeedModifier()
-	local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
-	local startTime = time_global()
-	local animationStartTime = 0
-	local animationEndTime = animationData.calculatedTime
-	local endTime = startTime + animationData.calculatedTime / animationSpeed * 1000 
-	local animInTime = 26 / animationData.originalFps
-	local animOutTime = 50 / animationData.originalFps
-
-	local hudMotionSpeed = 0.78
-	local hudMotionStarted = false	
-
+	-- Gameplay params
 	local staminaDrain = getStaminaDrain()
 	local staminaDrainPerMs = staminaDrain / (endTime - startTime)
 
 	local satietyDrain = getSatietyDrain()
 	local satietyDrainPerMs = satietyDrain / (endTime - startTime)
+
+	-- Hide detector and weapon immediately (move to ruck works)
+	local activeSlot = db.actor:active_slot()
+	local activeWpn = db.actor:active_item()
+	local activeDetector = db.actor:active_detector()
+	local activeWpnId
+	local activeDetectorId
+	if activeWpn or activeDetector then
+		if activeWpn then
+			db.actor:move_to_ruck(activeWpn)
+			activeWpnId = activeWpn:id()
+		end
+		if activeDetector then
+			db.actor:move_to_ruck(activeDetector)
+			activeDetectorId = activeDetector:id()
+		end	
+	end
+
+	-- Uncrouch if was crouched
+	if IsMoveState("mcCrouch") then
+		if (get_console():get_bool("crouch_toggle")) then
+			level.press_action(bind_to_dik(key_bindings.kCROUCH))
+		else
+			level.release_action(bind_to_dik(key_bindings.kCROUCH))
+		end
+	end
 
 	-- game.only_allow_movekeys(true)
 	game.set_actor_allow_ladder(false)
