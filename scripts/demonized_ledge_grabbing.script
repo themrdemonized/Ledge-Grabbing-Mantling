@@ -351,39 +351,49 @@ function checkLedgeGrabbing()
 				end
 
 				if flat then
+
+					-- Player height check on climbPos
+					-- If height is not enough - stop checking next position, assume that you cant move further
 					local function posCheck(res)
-						-- Player height check on climbPos
-						-- If height is not enough - stop checking next position, assume that you cant move further
 						local ray = dgr.geometry_ray({
 							ray_range = 1.4,
 							flags = 2,
 							ignore_object = db.actor
 						})
 						local heightRes = ray:get(res.position, vector():set(0,1,0))
-						validCollisionPos = not heightRes.success
-						climbPos = res.position
-						climbNormal = normal
+						return not heightRes.success
+					end
 
-						if debugMode then
-							local p = gizmos.rayLines[j]
-							p.color = validCollisionPos and fcolor():set(0,1,0,1) or fcolor():set(1,0,0,1)
-							for k = j + 1, #gizmos.rayLines do
-								local x = gizmos.rayLines[k]
-								x.visible = false
-							end
+					local valid = posCheck(res)
+					
+					if debugMode then
+						local p = gizmos.rayLines[j]
+						p.color = valid and fcolor():set(0,1,0,1) or fcolor():set(1,0,0,1)
+						for k = j + 1, #gizmos.rayLines do
+							local x = gizmos.rayLines[k]
+							x.visible = false
 						end
 					end
-					posCheck(res)
+
+					validCollisionPos = valid
+					climbPos = res.position
+					climbNormal = normal
+
+					if not validCollisionPos then break end
 
 					-- Advance position a bit further and check it as well for better result
-					-- If successfull - use that, otherwise use  result
+					-- If successfull - use that, otherwise use result
 					local pos = vector():mad(actorPos, actorDir, i + 0.05)
 					pos.y = maxY
 					local res = ray:get(pos, dir)
 					if res.success then
 						local flat, normal = isFlat(pos, dir)
 						if normal and flat then
-							posCheck(res)
+							local valid = posCheck(res)
+							if valid then
+								climbPos = res.position
+								climbNormal = normal
+							end
 						end
 					end
 
