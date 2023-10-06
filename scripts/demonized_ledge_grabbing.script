@@ -16,6 +16,8 @@ local savedActorPos
 local savedActorDir
 local savedJumpPressedTime = math.huge
 local savedCamY
+local savedSpeed = vector():set(0,0,0)
+local savedSpeedPos = vector():set(0,0,0)
 local climbActive = false
 local id = 69000
 local idOffset = 0
@@ -172,6 +174,7 @@ end
 function actor_on_first_update()
 	savedActorPos = db.actor:position()
 	savedActorDir = db.actor:direction()
+	savedSpeedPos = db.actor:position()
 	savedCamY = device().cam_pos.y - savedActorPos.y
 	gizmos.sphereStart = debug_render.add_object(id + idOffset, DBG_ScriptObject.sphere):cast_dbg_sphere()
 	idOffset = idOffset + 1
@@ -195,6 +198,7 @@ function actor_on_first_update()
 
 	reset(nil, true)
 	RegisterScriptCallback("actor_on_update", checkLedgeGrabbing)
+	RegisterScriptCallback("actor_on_update", speedSaver)
 end
 
 function reset(gizmosArr, force)
@@ -280,6 +284,13 @@ function checkClimbPrecondition()
 	-- Disable when on ladder
 	if IsMoveState("mcClimb") then return false end
 	return true
+end
+
+function speedSaver()
+	local pos = db.actor:position()
+	local speed = vector():set(pos):sub(savedSpeedPos):mul(1 / device().time_delta)
+	savedSpeedPos = pos
+	savedSpeed = speed
 end
 
 function checkLedgeGrabbing()
@@ -542,8 +553,11 @@ function checkLedgeGrabbing()
     savedClimbNormal = climbNormal
 end
 
+-- Weight factor
+-- Follows vanilla CoP behaviour (no penalty with less than 50% of weight)
+-- The maxWeight is minumum 60 kg in order to give more stamina with starter equipment
 function getActorWeights()
-	local maxWeight = db.actor:get_actor_max_walk_weight()
+	local maxWeight = math.max(60, db.actor:get_actor_max_walk_weight())
 	local minWeight = maxWeight / 2
 	local weight = db.actor:get_total_weight()
 	return weight, minWeight, maxWeight
@@ -557,7 +571,7 @@ function getAnimationSpeedModifier()
 	local weight, minWeight, maxWeight = getActorWeights()
 	local k = mapRangeClamped(weight, minWeight, maxWeight, 0, 0.33)
 	k = 1 - k
-	local staminaK = mapRangeClamped(db.actor.power, 0, 0.66, 0.9, 1)
+	local staminaK = mapRangeClamped(db.actor.power, 0, 0.66, 0.87, 1)
 	k = k * staminaK
 	return k
 end
@@ -581,7 +595,8 @@ function getRotationAnimModifier()
 end
 
 function tryToClimb()
-	if not (savedClimbPos and not climbActive) then return end
+	if climbActive then return end
+	if not savedClimbPos then return end
 
 	-- Read animation data and set params
 	local animationSpeed = 0.8 * getAnimationSpeedModifier()
@@ -742,6 +757,7 @@ function tryToClimb()
 				UnregisterScriptCallback("actor_on_update", performClimb)
 				CreateTimeEvent("ledge_grabbing", "reset", 0.5, function()
 					climbActive = false
+					reset()
 					return true
 				end)
 				return
@@ -930,15 +946,15 @@ function checkJump(pressed)
 			end
 		end
 	elseif key_state(DIK_keys.DIK_SPACE) == 1 then
-		if not IsMoveState('mcJump') then
-			-- print_tip("Not jumping stop check")
-			UnregisterScriptCallback("actor_on_update", checkJump)
-			return
-		end
-
 		-- Otherwise try after sometime
 		if (time_global() - savedJumpPressedTime)  > settings.jumpTriggerTime then
-			if tryToClimb() then
+			if savedSpeed.y > -0.003 then
+				if tryToClimb() then
+					UnregisterScriptCallback("actor_on_update", checkJump)
+					return
+				end
+			else
+				print_tip("Not jumping stop check, %s", savedSpeed)
 				UnregisterScriptCallback("actor_on_update", checkJump)
 				return
 			end
@@ -969,7 +985,7 @@ end
 function on_game_start()
 	assert(level.set_cam_custom_position_direction, "[Ledge Grabbing] Modded Exes are required for mod to work, download from https://github.com/themrdemonized/STALKER-Anomaly-modded-exes")
 	RegisterScriptCallback("on_key_press", on_key_press)
-	RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+	RegisterScriptCallback("on_loading_screen_key_prompt", actor_on_first_update)
 	RegisterScriptCallback("actor_on_first_update", load_settings)
 	RegisterScriptCallback("on_option_change", load_settings)
 end
