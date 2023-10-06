@@ -28,6 +28,8 @@ local minClimbHeight = 1.42
 local drf = demonized_randomizing_functions
 local dgr = demonized_geometry_ray
 
+local soundPath = "ledge_grab"
+
 -- Postpone on next n tick
 local nextTick = _G.nextTick or function(f, n)
 	n = math.floor(math.max(n or 1, 1))
@@ -685,6 +687,9 @@ function tryToClimb()
 
 	-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
 	nextTick(function()
+		local snd = xr_sound.get_safe_sound_object(soundPath)
+		snd:play(db.actor, 0, sound_object.s2d)
+		snd.frequency = getAnimationSpeedModifier()
 		local k = 0
 		local performClimb
 		performClimb = function()
