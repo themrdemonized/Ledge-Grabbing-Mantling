@@ -15,13 +15,13 @@ local savedCollisionPos
 local savedActorPos
 local savedActorDir
 local savedJumpPressedTime = math.huge
+local savedCamY
 local climbActive = false
 local id = 69000
 local idOffset = 0
 
 -- Settings
 local debugMode = false
-local climbTriggerDistance = 1.3
 local maxClimbHeight = 2.5
 local minClimbHeight = 1.42
 
@@ -172,6 +172,7 @@ end
 function actor_on_first_update()
 	savedActorPos = db.actor:position()
 	savedActorDir = db.actor:direction()
+	savedCamY = device().cam_pos.y - savedActorPos.y
 	gizmos.sphereStart = debug_render.add_object(id + idOffset, DBG_ScriptObject.sphere):cast_dbg_sphere()
 	idOffset = idOffset + 1
 
@@ -321,7 +322,7 @@ function checkLedgeGrabbing()
 	-- Then check if found surface is flat
 	-- If all succeeds - found a point to climb to
 	-- Collision point will be the previous ray result from climb point, it will determine a wall
-	local rayStepDistance = climbTriggerDistance / settings.raySteps
+	local rayStepDistance = settings.climbTriggerDistance / settings.raySteps
 	for j = 1, settings.raySteps do
 		local i = rayStepDistance * j
 		local ray = dgr.geometry_ray({
@@ -549,19 +550,22 @@ function getActorWeights()
 end
 
 -- Animation speed modifier
--- 50% speed reduction when player is at max weight
+-- 33% speed reduction when player is at max weight
 -- Full speed if weight is below half of max walk weight
+-- Slight speed reduction at low stamina
 function getAnimationSpeedModifier()
 	local weight, minWeight, maxWeight = getActorWeights()
 	local k = mapRangeClamped(weight, minWeight, maxWeight, 0, 0.33)
 	k = 1 - k
+	local staminaK = mapRangeClamped(db.actor.power, 0, 0.66, 0.9, 1)
+	k = k * staminaK
 	return k
 end
 
 -- Stamina drain modifier
 function getStaminaDrain()
 	local weight, minWeight, maxWeight = getActorWeights()
-	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.15, 0.8)
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.12, 0.72)
 	return k
 end
 
@@ -601,7 +605,7 @@ function tryToClimb()
 	local actorPos = db.actor:position()
 
 	-- Get difference from camera height to position
-	local camY = device().cam_pos.y - actorPos.y
+	local camY = savedCamY
 
 	-- make playerPos during climb so it will stay there during camera anim
 	-- Adjust it to fit animation
@@ -648,6 +652,8 @@ function tryToClimb()
 	local startCameraPos = vector():mad(p, d, startCameraDistance)
 	-- startCameraPos.y = climbPos.y
 	startCameraPos:add(startCameraOffset)
+
+	print_tip("playerPos %s \\n camY %s", playerPos, camY)
 
 	-- Gameplay params
 	local staminaDrain = getStaminaDrain()
@@ -891,11 +897,35 @@ function tryToClimb()
 	return true
 end
 
+function onScreenCheck()
+	if not savedClimbPos then return end
+	if not savedInterPos then return end
+
+	-- Don't init climb if points arent on the screen
+    local climbPosUi = game.world2ui(savedClimbPos)
+    local interPosUi = game.world2ui(savedInterPos)
+    local topBorder = 768 * 1/3
+    local bottomBorder = 768 * 2/3
+    local leftBorder = 1024 * 1/3
+    local rightBorder = 1024 * 2/3
+
+    if (climbPosUi.x >= leftBorder and climbPosUi.x <= rightBorder and climbPosUi.y >= topBorder and climbPosUi.y <= bottomBorder)
+    or (interPosUi.x >= leftBorder and interPosUi.y <= rightBorder and interPosUi.y >= topBorder and interPosUi.y <= bottomBorder)
+    then
+    	return true
+    end
+    return false
+end
+
 function checkJump(pressed)
 	if pressed == true then
 		-- If savedClimbPos is similar to camera height or below it - init climb immediately
 		if savedClimbPos and (savedClimbPos.y < device().cam_pos.y or similar(savedClimbPos.y, device().cam_pos.y, 0.35)) then
 			if tryToClimb() then
+				UnregisterScriptCallback("actor_on_update", checkJump)
+			end
+		elseif savedClimbPos and onScreenCheck() then
+	    	if tryToClimb() then
 				UnregisterScriptCallback("actor_on_update", checkJump)
 			end
 		end
@@ -907,7 +937,7 @@ function checkJump(pressed)
 		end
 
 		-- Otherwise try after sometime
-		if time_global() - savedJumpPressedTime > settings.jumpTriggerTime then
+		if (time_global() - savedJumpPressedTime)  > settings.jumpTriggerTime then
 			if tryToClimb() then
 				UnregisterScriptCallback("actor_on_update", checkJump)
 				return
