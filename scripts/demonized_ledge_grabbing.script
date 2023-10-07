@@ -24,8 +24,8 @@ local idOffset = 0
 
 -- Settings
 local debugMode = false
-local maxClimbHeight = 2.5
-local minClimbHeight = 1.42
+maxClimbHeight = 2.5
+minClimbHeight = 1.42
 
 local drf = demonized_randomizing_functions
 local dgr = demonized_geometry_ray
@@ -665,10 +665,9 @@ function tryToClimb()
 	local p = vector():set(playerPos)
 	p.y = p.y + camY
 	local startCameraPos = vector():mad(p, d, startCameraDistance)
-	-- startCameraPos.y = climbPos.y
 	startCameraPos:add(startCameraOffset)
 
-	print_tip("playerPos %s \\n camY %s", playerPos, camY)
+	-- print_tip("playerPos %s \\n camY %s", playerPos, camY)
 
 	-- Gameplay params
 	local staminaDrain = getStaminaDrain()
@@ -954,7 +953,7 @@ function checkJump(pressed)
 					return
 				end
 			else
-				print_tip("Not jumping stop check, %s", savedSpeed)
+				-- print_tip("Not jumping stop check, %s", savedSpeed)
 				UnregisterScriptCallback("actor_on_update", checkJump)
 				return
 			end
@@ -966,13 +965,13 @@ end
 
 function on_key_press(dik)
 	if dik == DIK_keys.DIK_H then
-		tryToClimb()
+		-- tryToClimb()
 	end
 	if dik == DIK_keys.DIK_J then
-		debugMode = not debugMode
-		if not debugMode then
-			reset(nil, true)
-		end
+		-- debugMode = not debugMode
+		-- if not debugMode then
+		-- 	reset(nil, true)
+		-- end
 	end
 	local bind = dik_to_bind(dik)
 	if bind == key_bindings.kJUMP then
