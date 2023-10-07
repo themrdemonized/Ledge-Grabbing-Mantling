@@ -19,21 +19,28 @@
 	</string>
 
 	<string id="ui_mcm_ledge_grabbing_enable">
-		<text>Enable</text>
+		<text>Включить</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_climbTriggerDistance">
+		<text>Расстояние срабатывания</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_climbTriggerDistance_desc">
+		<text>Максимальное расстояние для инициирования захвата</text>
 	</string>
 
 	<string id="ui_mcm_demonized_ledge_grabbing_raySteps">
-		<text>Ledge Grabbing Accuracy</text>
+		<text>Точность захвата</text>
 	</string>
 	<string id="ui_mcm_demonized_ledge_grabbing_raySteps_desc">
-		<text>Bigger number - better detection and position for grabbing at the cost of slight performance</text>
+		<text>Большее число - лучшее обнаружение и позиция для захвата</text>
 	</string>
 
 	<string id="ui_mcm_demonized_ledge_grabbing_jumpTriggerTime">
-		<text>Time to Hold Jump To Trigger</text>
+		<text>Время удержания прыжка для срабатывания</text>
 	</string>
 	<string id="ui_mcm_demonized_ledge_grabbing_jumpTriggerTime_desc">
-		<text>If you hold jump for more than this time, the ledge grabbing will be activated</text>
+		<text>Если удерживать прыжок дольше указанного времени, будет активирован захват уступа</text>
 	</string>
 
 </string_table>
