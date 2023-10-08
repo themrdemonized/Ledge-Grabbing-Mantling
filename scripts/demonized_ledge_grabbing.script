@@ -321,10 +321,7 @@ function checkLedgeGrabbing()
 	local minY = actorPos.y + minClimbHeight
 	local rayRange = maxY - minY
 
-	-- TODO: Fix to make it work with exactly (0, -1, 0)
-	-- local dir = vector():set(0, -1, 0)
 	local dir = getDownVector()
-
 	local results = {
 		[0] = {vector():set(actorPos.x, maxY, actorPos.z):mad(dir, rayRange), vector():set(dir):invert()}
 	}
@@ -589,9 +586,9 @@ function getSatietyDrain()
 	return k
 end
 
--- Get modifier for prebaked camera rotations
+-- Get additional rotation modifier for prebaked anim
 function getRotationAnimModifier()
-	return 0.5
+	return 1
 end
 
 function tryToClimb()
@@ -599,17 +596,18 @@ function tryToClimb()
 	if not savedClimbPos then return end
 
 	-- Read animation data and set params
-	local animationSpeed = 0.8 * getAnimationSpeedModifier()
 	local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
+	local animationSpeed = animationData.animationSpeed * getAnimationSpeedModifier()
 	local startTime = time_global()
 	local animationStartTime = 0
 	local animationEndTime = animationData.calculatedTime
 	local endTime = startTime + animationData.calculatedTime / animationSpeed * 1000 
-	local animInTime = 26 / animationData.originalFps
-	local animOutTime = 50 / animationData.originalFps
+	local animInTime = animationData.animInFrame / animationData.originalFps
+	local animOutTime = animationData.animOutFrame / animationData.originalFps
+	local animRotationModifier = animationData.rotationModifier
 
 	-- Adjust hud motion
-	local hudMotionSpeed = 0.78
+	local hudMotionSpeed = animationData.hudMotionSpeed
 	local hudMotionStarted = false	
 
 	-- Get positions
@@ -868,9 +866,9 @@ function tryToClimb()
 
 			-- Apply additive from prebaked animation
 			cameraRot = vector():set(
-				cameraRot.x + rotationXRes.y * getRotationAnimModifier(),
-				cameraRot.y + rotationYRes.y * getRotationAnimModifier(),
-				cameraRot.z + rotationZRes.y * getRotationAnimModifier()
+				cameraRot.x + rotationXRes.y * animRotationModifier * getRotationAnimModifier(),
+				cameraRot.y + rotationYRes.y * animRotationModifier * getRotationAnimModifier(),
+				cameraRot.z + rotationZRes.y * animRotationModifier * getRotationAnimModifier()
 			)
 
 			-- Return to initial rotation when returning from animation to procedural

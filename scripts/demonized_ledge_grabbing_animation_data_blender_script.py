@@ -1,8 +1,6 @@
 # Python script for export anim data in blender
 # Paste in Blender scripting window
-
-# Python script for export anim data in blender
-# Paste in Blender scripting window
+# exported camera_root
 
 import bpy
 
@@ -73,6 +71,24 @@ data = {{
     animationFrameLength = {length},
     originalFps = {fps},
     calculatedTime = {animTime},
+
+    -- Below is the data to modify manually
+    -- Modifier to camera rotations
+    rotationModifier = 1,
+
+    -- Frame starting from prebaked animation will be used fully
+    animInFrame = 26,
+
+    -- Frame from which prebaked animation will blend out to procedural animation
+    animOutFrame = 50,
+
+    -- Speed of animation
+    animationSpeed = 1,
+
+    -- Speed of hands animation, affected by overall animationSpeed
+    hudMotionSpeed = 1,
+
+    -- Generated curves, touch with care
     curves = {{
         {formattedCurves}      
     }}

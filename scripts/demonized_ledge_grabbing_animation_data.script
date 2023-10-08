@@ -2,11 +2,15 @@
 -- curves contain camera transform during animation time
 -- each time as a key corresponds to different bezier curve segments
 -- the points for each time are bezier curve control points
--- 
 data = {
 	animationFrameLength = 86,
 	originalFps = 60,
 	calculatedTime = 1.4333333333333333,
+	rotationModifier = 0.5,
+	animInFrame = 26,
+	animOutFrame = 50,
+	animationSpeed = 0.8,
+	hudMotionSpeed = 0.78,
 	curves = {
 		locationX = {
 			[0.0] = { vector():set(0.0, 0.0, 0), vector():set(2.0, 0.0, 0), vector():set(4.0, 0.0, 0), vector():set(6.0, 0.0, 0), },
