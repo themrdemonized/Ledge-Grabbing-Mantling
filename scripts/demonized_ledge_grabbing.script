@@ -1,3 +1,5 @@
+local id = 69000
+local idOffset = 0
 local gizmos = {
 	sphereStart = nil,
 	sphereEnd = nil,
@@ -19,8 +21,6 @@ local savedCamY
 local savedSpeed = vector():set(0,0,0)
 local savedSpeedPos = vector():set(0,0,0)
 local climbActive = false
-local id = 69000
-local idOffset = 0
 
 -- Settings
 local debugMode = false
@@ -29,8 +29,6 @@ minClimbHeight = 1.42
 
 local drf = demonized_randomizing_functions
 local dgr = demonized_geometry_ray
-
-local soundPath = "ledge_grab"
 
 -- Postpone on next n tick
 local nextTick = _G.nextTick or function(f, n)
@@ -587,8 +585,13 @@ function getSatietyDrain()
 end
 
 -- Get additional rotation modifier for prebaked anim
-function getRotationAnimModifier()
+function getRotationModifier()
 	return 1
+end
+
+-- Get sound for climbing
+function getSoundPath()
+	return "ledge_grab"
 end
 
 function tryToClimb()
@@ -705,9 +708,11 @@ function tryToClimb()
 
 	-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
 	nextTick(function()
+		local soundPath = getSoundPath()
 		local snd = xr_sound.get_safe_sound_object(soundPath)
 		snd:play(db.actor, 0, sound_object.s2d)
 		snd.frequency = getAnimationSpeedModifier()
+		
 		local k = 0
 		local performClimb
 		performClimb = function()
@@ -866,9 +871,9 @@ function tryToClimb()
 
 			-- Apply additive from prebaked animation
 			cameraRot = vector():set(
-				cameraRot.x + rotationXRes.y * animRotationModifier * getRotationAnimModifier(),
-				cameraRot.y + rotationYRes.y * animRotationModifier * getRotationAnimModifier(),
-				cameraRot.z + rotationZRes.y * animRotationModifier * getRotationAnimModifier()
+				cameraRot.x + rotationXRes.y * animRotationModifier * getRotationModifier(),
+				cameraRot.y + rotationYRes.y * animRotationModifier * getRotationModifier(),
+				cameraRot.z + rotationZRes.y * animRotationModifier * getRotationModifier()
 			)
 
 			-- Return to initial rotation when returning from animation to procedural
