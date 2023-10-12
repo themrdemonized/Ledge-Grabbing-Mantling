@@ -692,17 +692,14 @@ function getOutfitSound()
 		folder = outfitToSoundFolder[repair_type] or outfitToSoundFolder[kind] or outfitToSoundFolder.o_medium
 	end
 
-	-- Get sound from a folder
 	return getSoundFromFolder(folder)
 end
 
 function getGruntSound()
-	-- Get sound from a folder
 	return getSoundFromFolder(gruntSoundFolder)
 end
 
 function getSounds()
-	-- Get sound from a folder
 	local o = getOutfitSound()
 	local g = getGruntSound()
 	return o, g
