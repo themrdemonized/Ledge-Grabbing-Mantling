@@ -1,3 +1,19 @@
+-- Imports
+local abs = math.abs
+local acos = math.acos
+local asin = math.asin
+local cos = math.cos
+local deg = math.deg
+local max = math.max
+local min = math.min
+local sin = math.sin
+local floor = math.floor
+local huge = math.huge
+local random = math.random
+
+local tsort = table.sort
+local tinsert = table.insert
+
 local id = 69000
 local idOffset = 0
 local gizmos = {
@@ -16,7 +32,7 @@ local savedInterPos
 local savedCollisionPos
 local savedActorPos
 local savedActorDir
-local savedJumpPressedTime = math.huge
+local savedJumpPressedTime = huge
 local savedCamY
 local savedSpeed = vector():set(0,0,0)
 local savedSpeedPos = vector():set(0,0,0)
@@ -30,7 +46,7 @@ local dgr = demonized_geometry_ray
 
 -- Postpone on next n tick
 local nextTick = _G.nextTick or function(f, n)
-	n = math.floor(math.max(n or 1, 1))
+	n = floor(max(n or 1, 1))
 	AddUniqueCall(function()
 		if n == 1 then
 			return f()
@@ -56,7 +72,7 @@ end
 
 local function similar(a, b, eps)
 	eps = eps or 0.00001
-	return math.abs(a - b) < eps
+	return abs(a - b) < eps
 end
 
 local function vecSimilar(v1, v2, eps)
@@ -80,7 +96,7 @@ local function cubicBezier2D(v1, v2, v3, v4, t)
 end
 
 local function mapRangeClamped(inVal, inMin, inMax, outMin, outMax)
-	local k = math.min(1, normalize(inVal, inMin, inMax))
+	local k = min(1, normalize(inVal, inMin, inMax))
 	return lerp(outMin, outMax, k)
 end
 
@@ -93,9 +109,9 @@ local function array_keys(t, sorted, sort_func)
 	end
 	if sorted then
 		if sort_func then
-			table.sort(res, sort_func)
+			tsort(res, sort_func)
 		else
-			table.sort(res)
+			tsort(res)
 		end
 	end
 	return res
@@ -111,7 +127,7 @@ local function bisect_left(a, x, lo, hi)
 	end
 
 	while lo < hi do
-		local mid = math.floor((lo + hi) * 0.5)
+		local mid = floor((lo + hi) * 0.5)
 		if a[mid] < x then 
 			lo = mid+1
 		else
@@ -143,7 +159,11 @@ local function lookup(t, key, tkeys)
 end
 
 local function randomFromArray(arr)
-	return arr[math.random(#arr)]
+	return arr[random(#arr)]
+end
+
+local function randomPlusMinus(v)
+	return random_float(-v, v)
 end
 
 -- MCM
@@ -256,7 +276,7 @@ function isWall(position, direction, targetAngle)
 	)
 	if not normal then return end
 
-	local angle = math.abs(math.deg(math.asin(normal.y)))
+	local angle = abs(deg(asin(normal.y)))
     return angle < targetAngle, normal
 end
 
@@ -268,19 +288,19 @@ function isFlat(position, direction, targetAngle)
 	)
 	if not normal then return end
 
-	local angle = math.abs(math.deg(math.acos(normal.y)))
+	local angle = abs(deg(acos(normal.y)))
     return angle < targetAngle, normal
 end
 
 function getClimbPathEndPoints(actorPos, collisionPos, interPos, climbPos)
-	local p1 = actorPos
+	local p1 = vector():set(actorPos)
 	local p2 = vector():set(interPos.x, actorPos.y, interPos.z)
 	local p3 = vector():set(
 		lerp(actorPos.x, climbPos.x, 0.25),
 		interPos.y,
 		lerp(actorPos.z, climbPos.z, 0.25)
 	)
-	local p4 = climbPos
+	local p4 = vector():set(climbPos)
 	return p1, p2, p3, p4
 end
 
@@ -573,7 +593,7 @@ function getActorMaxWalkWeight()
 	return maxWeight
 end
 function getActorWeights()
-	local maxWeight = math.max(60, getActorMaxWalkWeight())
+	local maxWeight = max(60, getActorMaxWalkWeight())
 	local minWeight = maxWeight / 2
 	local weight = db.actor:get_total_weight()
 	return weight, minWeight, maxWeight
@@ -635,7 +655,7 @@ function populateSoundFolderCache(folder)
 		end)()
 		if ext == "ogg" then
 			file = folder .. file
-			table.insert(t, file)
+			tinsert(t, file)
 		end
 	end
 	return t
@@ -677,7 +697,7 @@ function getSounds()
 end
 
 function canPlayGruntSound()
-	return math.random() < settings.gruntProbability
+	return random() < settings.gruntProbability
 end
 
 AddScriptCallback("actor_on_climb_start")
@@ -807,7 +827,7 @@ function tryToClimb()
 		if sound then
 			sound:play(db.actor, 0, sound_object.s2d)
 			sound.volume = settings.soundVolume
-			sound.frequency = animationSpeedModifier + random_float(-0.05, 0.05)
+			sound.frequency = animationSpeedModifier + randomPlusMinus(0.07)
 		end
 		local gruntSoundCanPlay = gruntSound and canPlayGruntSound() 
 		
@@ -870,7 +890,7 @@ function tryToClimb()
 				gruntSoundPlayed = true
 				gruntSound:play(db.actor, 0, sound_object.s2d)
 				gruntSound.volume = settings.gruntVolume
-				gruntSound.frequency = 1 + random_float(-0.05, 0.05)
+				gruntSound.frequency = 1 + randomPlusMinus(0.07)
 			end
 
 			-- Get camera params from animation data					
@@ -907,11 +927,11 @@ function tryToClimb()
 
 			-- Calculate procedural camera transform
 			k = normalize(time_global(), startTime, endTime)
-			k = math.min(1, k)
+			k = min(1, k)
 			local cameraPos2 = cubicBezier(p1, p2, p3, p4, drf.CubicEaseInOut(k))
 
 			-- Interpolate between procedural and animation camera in animInTime
-			local animInK = math.min(1, normalize(animTime, 0, animInTime))
+			local animInK = min(1, normalize(animTime, 0, animInTime))
 			animInK = drf.QuadraticEaseInOut(animInK)
 			local resultPosition = vecLerp(cameraPos2, cameraPos, animInK)
 			
