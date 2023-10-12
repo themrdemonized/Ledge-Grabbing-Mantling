@@ -14,6 +14,10 @@ local random = math.random
 local tsort = table.sort
 local tinsert = table.insert
 
+local time_global = time_global
+local normalize = normalize
+local clamp = clamp
+
 local id = 69000
 local idOffset = 0
 local gizmos = {
@@ -358,9 +362,10 @@ function checkLedgeGrabbing()
 	-- If all succeeds - found a point to climb to
 	-- Collision point will be the previous ray result from climb point, it will determine a wall
 	local rayStepDistance = settings.climbTriggerDistance / settings.raySteps
+	local geometry_ray = dgr.geometry_ray
 	for j = 1, settings.raySteps do
 		local i = rayStepDistance * j
-		local ray = dgr.geometry_ray({
+		local ray = geometry_ray({
 			ray_range = rayRange,
 			flags = 2,
 			ignore_object = db.actor
@@ -393,7 +398,7 @@ function checkLedgeGrabbing()
 					-- Player height check on climbPos
 					-- If height is not enough - stop checking next position, assume that you cant move further
 					local function posCheck(res)
-						local ray = dgr.geometry_ray({
+						local ray = geometry_ray({
 							ray_range = 1.4,
 							flags = 2,
 							ignore_object = db.actor
@@ -542,7 +547,7 @@ function checkLedgeGrabbing()
 
     -- Collision check for climb path - ray cast to interPos
     local posToInterVec = vector():set(interPos):sub(actorPos)
-    local collisionCheckRay = dgr.geometry_ray({
+    local collisionCheckRay = geometry_ray({
     	ray_range = posToInterVec:magnitude(),
 		flags = 2,
 		ignore_object = db.actor
@@ -661,7 +666,21 @@ function populateSoundFolderCache(folder)
 	return t
 end
 
-function getSounds()
+function getSoundFromFolder(folder)
+	-- Get sound from a folder
+	if not soundFolderCache[folder] then
+		soundFolderCache[folder] = populateSoundFolderCache(folder)
+	end
+	local sound = randomFromArray(soundFolderCache[folder])
+	if not sound then
+		print_tip("![Ledge Grabbing] no sounds found in %s", folder)
+		return
+	end
+	local soundObj = xr_sound.get_safe_sound_object(sound)
+	return soundObj
+end
+
+function getOutfitSound()
 	-- Find folder by suit
 	local outfit = db.actor:item_in_slot(7)
 	local folder
@@ -674,26 +693,19 @@ function getSounds()
 	end
 
 	-- Get sound from a folder
-	if not soundFolderCache[folder] then
-		soundFolderCache[folder] = populateSoundFolderCache(folder)
-	end
-	local sound = randomFromArray(soundFolderCache[folder])
-	if not sound then
-		print_tip("![Ledge Grabbing] no sounds found in %s", folder)
-		return
-	end
-	local soundObj = xr_sound.get_safe_sound_object(sound)
+	return getSoundFromFolder(folder)
+end
 
+function getGruntSound()
 	-- Get sound from a folder
-	if not soundFolderCache[gruntSoundFolder] then
-		soundFolderCache[gruntSoundFolder] = populateSoundFolderCache(gruntSoundFolder)
-	end
-	local sound = randomFromArray(soundFolderCache[gruntSoundFolder])
-	if sound then
-		local gruntSoundObj = xr_sound.get_safe_sound_object(sound)
-		return soundObj, gruntSoundObj
-	end
-	return soundObj, nil
+	return getSoundFromFolder(gruntSoundFolder)
+end
+
+function getSounds()
+	-- Get sound from a folder
+	local o = getOutfitSound()
+	local g = getGruntSound()
+	return o, g
 end
 
 function canPlayGruntSound()
@@ -821,6 +833,10 @@ function tryToClimb()
 	-- game.only_allow_movekeys(true)
 	game.set_actor_allow_ladder(false)
 
+	local CubicEaseInOut = drf.CubicEaseInOut
+	local QuadraticEaseIn = drf.QuadraticEaseIn
+	local QuadraticEaseInOut = drf.QuadraticEaseInOut
+
 	-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
 	nextTick(function()
 		local sound, gruntSound = getSounds()
@@ -928,11 +944,11 @@ function tryToClimb()
 			-- Calculate procedural camera transform
 			k = normalize(time_global(), startTime, endTime)
 			k = min(1, k)
-			local cameraPos2 = cubicBezier(p1, p2, p3, p4, drf.CubicEaseInOut(k))
+			local cameraPos2 = cubicBezier(p1, p2, p3, p4, CubicEaseInOut(k))
 
 			-- Interpolate between procedural and animation camera in animInTime
 			local animInK = min(1, normalize(animTime, 0, animInTime))
-			animInK = drf.QuadraticEaseInOut(animInK)
+			animInK = QuadraticEaseInOut(animInK)
 			local resultPosition = vecLerp(cameraPos2, cameraPos, animInK)
 			
 			-- Move player with camera then stop it to playerPos
@@ -948,7 +964,7 @@ function tryToClimb()
 
 			-- Calculate position when returning from animation to procedural 
 			local animOutK = clamp(normalize(animTime, animOutTime, animationEndTime), 0, 1)
-			animOutK = drf.QuadraticEaseInOut(animOutK)
+			animOutK = QuadraticEaseInOut(animOutK)
 			resultPosition = vecLerp(
 				resultPosition,
 				cameraPos2,
@@ -976,7 +992,7 @@ function tryToClimb()
 			)
 
 			local animRotationK = clamp(normalize(animTime, animInTime, animOutTime), 0, 1)
-			animRotationK = drf.QuadraticEaseInOut(animRotationK)
+			animRotationK = QuadraticEaseInOut(animRotationK)
 
 			-- Interpolate look to climbPos
 			local dirFromActorPosToClimbPos = vector():set(
@@ -1027,7 +1043,7 @@ function tryToClimb()
 			end
 
 			-- Drain stamina
-			local staminaK = drf.QuadraticEaseIn(k) + 1
+			local staminaK = QuadraticEaseIn(k) + 1
 			db.actor:change_power(-staminaDrainPerMs * staminaK * device().time_delta)
 
 			-- Drain satiety
