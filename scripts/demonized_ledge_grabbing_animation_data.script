@@ -11,6 +11,7 @@ data = {
 	animOutFrame = 50,
 	animationSpeed = 0.8,
 	hudMotionSpeed = 0.78,
+	gruntSoundFrame = 26,
 	curves = {
 		locationX = {
 			[0.0] = { vector():set(0.0, 0.0, 0), vector():set(2.0, 0.0, 0), vector():set(4.0, 0.0, 0), vector():set(6.0, 0.0, 0), },

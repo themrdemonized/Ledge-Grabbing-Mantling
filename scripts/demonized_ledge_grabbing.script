@@ -24,8 +24,6 @@ local climbActive = false
 
 -- Settings
 local debugMode = false
-maxClimbHeight = 2.5
-minClimbHeight = 1.42
 
 local drf = demonized_randomizing_functions
 local dgr = demonized_geometry_ray
@@ -144,6 +142,9 @@ local function lookup(t, key, tkeys)
     return delta, lo, hi
 end
 
+local function randomFromArray(arr)
+	return arr[math.random(#arr)]
+end
 
 -- MCM
 function load_defaults()
@@ -167,6 +168,13 @@ function load_settings()
 		end
 	end
 	return settings
+end
+
+function speedSaver()
+	local pos = db.actor:position()
+	local speed = vector():set(pos):sub(savedSpeedPos):mul(1 / device().time_delta)
+	savedSpeedPos = pos
+	savedSpeed = speed
 end
 
 function actor_on_first_update()
@@ -232,6 +240,14 @@ function reset(gizmosArr, force)
 	savedClimbPos = nil
 end
 
+function getMaxClimbHeight()
+	return 2.5
+end
+-- I suggest not monkey patch min climb or you'll make climbing small obstacles harder
+function getMinClimbHeight()
+	return 1.42
+end
+
 function isWall(position, direction, targetAngle)
 	targetAngle = targetAngle or 10
 	local normal = dgr.get_surface_normal(
@@ -284,13 +300,6 @@ function checkClimbPrecondition()
 	return true
 end
 
-function speedSaver()
-	local pos = db.actor:position()
-	local speed = vector():set(pos):sub(savedSpeedPos):mul(1 / device().time_delta)
-	savedSpeedPos = pos
-	savedSpeed = speed
-end
-
 function checkLedgeGrabbing()
 	if climbActive then return end
 	if not settings.enable then return reset() end
@@ -315,8 +324,8 @@ function checkLedgeGrabbing()
 	local climbNormal
 
 	local pos = actorPos
-	local maxY = actorPos.y + maxClimbHeight
-	local minY = actorPos.y + minClimbHeight
+	local maxY = actorPos.y + getMaxClimbHeight()
+	local minY = actorPos.y + getMinClimbHeight()
 	local rayRange = maxY - minY
 
 	local dir = getDownVector()
@@ -551,8 +560,20 @@ end
 -- Weight factor
 -- Follows vanilla CoP behaviour (no penalty with less than 50% of weight)
 -- The maxWeight is minumum 60 kg in order to give more stamina with starter equipment
+function getActorMaxWalkWeight()
+	local maxWeight = db.actor:get_actor_max_walk_weight()
+	local outfit = db.actor:item_in_slot(7)
+	local backpack = db.actor:item_in_slot(13)
+	maxWeight = maxWeight + (outfit and outfit:get_additional_max_weight() or 0)
+	maxWeight = maxWeight + (backpack and backpack:get_additional_max_weight() or 0)
+	db.actor:iterate_belt(function(owner, obj)
+		local c_arty = obj:cast_Artefact()
+		maxWeight = maxWeight + (c_arty and c_arty:AdditionalInventoryWeight() or 0)
+	end)
+	return maxWeight
+end
 function getActorWeights()
-	local maxWeight = math.max(60, db.actor:get_actor_max_walk_weight())
+	local maxWeight = math.max(60, getActorMaxWalkWeight())
 	local minWeight = maxWeight / 2
 	local weight = db.actor:get_total_weight()
 	return weight, minWeight, maxWeight
@@ -568,6 +589,7 @@ function getAnimationSpeedModifier()
 	k = 1 - k
 	local staminaK = mapRangeClamped(db.actor.power, 0, 0.66, 0.87, 1)
 	k = k * staminaK
+	-- print_tip(" weight: %s \\n minWeight: %s \\n maxWeight: %s \\n k %s \\n staminaK %s", weight, minWeight, maxWeight, k, staminaK)
 	return k
 end
 
@@ -590,17 +612,87 @@ function getRotationModifier()
 end
 
 -- Get sound for climbing
-function getSoundPath()
-	return "ledge_grab"
+outfitToSoundFolder = {
+	[0] = [[ledge_grabbing\vaulting\naked\]],
+	o_light = [[ledge_grabbing\vaulting\light\]],
+	o_medium = [[ledge_grabbing\vaulting\medium\]],
+	o_heavy = [[ledge_grabbing\vaulting\heavy\]],
+	outfit_exo = [[ledge_grabbing\vaulting\exo\]],
+}
+gruntSoundFolder = [[ledge_grabbing\grunts\]]
+soundFolderCache = {}
+function populateSoundFolderCache(folder)
+	local t = {}
+	local fileList = getFS():file_list_open("$game_sounds$", folder, bit_or(FS.FS_ListFiles, FS.FS_RootOnly))
+	count = fileList and fileList:Size() or 0
+	for i = 0, count - 1 do
+		local fileExt = fileList:GetAt(i)
+		local file = fileExt:sub(1, -5)
+		local ext = (function() 
+			local x = str_explode(fileExt, "%.")
+			if #x < 2 then return "" end
+			return x[#x]
+		end)()
+		if ext == "ogg" then
+			file = folder .. file
+			table.insert(t, file)
+		end
+	end
+	return t
 end
+
+function getSounds()
+	-- Find folder by suit
+	local outfit = db.actor:item_in_slot(7)
+	local folder
+	if not outfit then
+		folder = outfitToSoundFolder[0]
+	else
+		local kind = SYS_GetParam(0, outfit:section(), "kind", -1)
+		local repair_type = SYS_GetParam(0, outfit:section(), "repair_type", -1)
+		folder = outfitToSoundFolder[repair_type] or outfitToSoundFolder[kind] or outfitToSoundFolder.o_medium
+	end
+
+	-- Get sound from a folder
+	if not soundFolderCache[folder] then
+		soundFolderCache[folder] = populateSoundFolderCache(folder)
+	end
+	local sound = randomFromArray(soundFolderCache[folder])
+	if not sound then
+		print_tip("![Ledge Grabbing] no sounds found in %s", folder)
+		return
+	end
+	local soundObj = xr_sound.get_safe_sound_object(sound)
+
+	-- Get sound from a folder
+	if not soundFolderCache[gruntSoundFolder] then
+		soundFolderCache[gruntSoundFolder] = populateSoundFolderCache(gruntSoundFolder)
+	end
+	local sound = randomFromArray(soundFolderCache[gruntSoundFolder])
+	if sound then
+		local gruntSoundObj = xr_sound.get_safe_sound_object(sound)
+		return soundObj, gruntSoundObj
+	end
+	return soundObj, nil
+end
+
+function canPlayGruntSound()
+	return math.random() < settings.gruntProbability
+end
+
+AddScriptCallback("actor_on_climb_start")
+AddScriptCallback("actor_on_climb_end")
 
 function tryToClimb()
 	if climbActive then return end
 	if not savedClimbPos then return end
 
+	SendScriptCallback("actor_on_climb_start")
+
 	-- Read animation data and set params
+	local animationSpeedModifier = getAnimationSpeedModifier()
 	local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
-	local animationSpeed = animationData.animationSpeed * getAnimationSpeedModifier()
+	local animationSpeed = animationData.animationSpeed * animationSpeedModifier
 	local startTime = time_global()
 	local animationStartTime = 0
 	local animationEndTime = animationData.calculatedTime
@@ -608,6 +700,9 @@ function tryToClimb()
 	local animInTime = animationData.animInFrame / animationData.originalFps
 	local animOutTime = animationData.animOutFrame / animationData.originalFps
 	local animRotationModifier = animationData.rotationModifier
+
+	local gruntSoundTime = animationData.gruntSoundFrame / animationData.originalFps
+	local gruntSoundPlayed = false
 
 	-- Adjust hud motion
 	local hudMotionSpeed = animationData.hudMotionSpeed
@@ -708,10 +803,13 @@ function tryToClimb()
 
 	-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
 	nextTick(function()
-		local soundPath = getSoundPath()
-		local snd = xr_sound.get_safe_sound_object(soundPath)
-		snd:play(db.actor, 0, sound_object.s2d)
-		snd.frequency = getAnimationSpeedModifier()
+		local sound, gruntSound = getSounds()
+		if sound then
+			sound:play(db.actor, 0, sound_object.s2d)
+			sound.volume = settings.soundVolume
+			sound.frequency = animationSpeedModifier + random_float(-0.05, 0.05)
+		end
+		local gruntSoundCanPlay = gruntSound and canPlayGruntSound() 
 		
 		local k = 0
 		local performClimb
@@ -757,6 +855,7 @@ function tryToClimb()
 
 				-- Set flag after some time
 				UnregisterScriptCallback("actor_on_update", performClimb)
+				SendScriptCallback("actor_on_climb_end")
 				CreateTimeEvent("ledge_grabbing", "reset", 0.5, function()
 					climbActive = false
 					reset()
@@ -766,6 +865,13 @@ function tryToClimb()
 			end
 
 			local animTime = (time_global() - startTime) / 1000 * animationSpeed
+
+			if gruntSoundCanPlay and not gruntSoundPlayed and animTime > gruntSoundTime then
+				gruntSoundPlayed = true
+				gruntSound:play(db.actor, 0, sound_object.s2d)
+				gruntSound.volume = settings.gruntVolume
+				gruntSound.frequency = 1 + random_float(-0.05, 0.05)
+			end
 
 			-- Get camera params from animation data					
 			local locationX = animationData.curves.locationX
@@ -829,7 +935,7 @@ function tryToClimb()
 				animOutK
 			)
 
-			-- print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime)
+			-- print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s \\n modifier %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime, animationSpeedModifier)
 
 			-- Calculate rotations
 			-- Interpolate look to grab point

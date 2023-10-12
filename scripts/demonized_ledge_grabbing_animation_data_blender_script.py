@@ -88,6 +88,9 @@ data = {{
     -- Speed of hands animation, affected by overall animationSpeed
     hudMotionSpeed = 1,
 
+    -- Frame to play grunt sound
+    gruntSoundFrame = 26,
+
     -- Generated curves, touch with care
     curves = {{
         {formattedCurves}      
