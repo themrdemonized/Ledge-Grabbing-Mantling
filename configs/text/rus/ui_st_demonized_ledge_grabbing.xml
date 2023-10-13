@@ -43,5 +43,15 @@
 		<text>Если удерживать прыжок дольше указанного времени, будет активирован захват уступа</text>
 	</string>
 
+	<string id="ui_mcm_demonized_ledge_grabbing_soundVolume">
+		<text>Громкость звуков разгрузки</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_gruntVolume">
+		<text>Громкость звуков персонажа</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_gruntProbability">
+		<text>Вероятность звуков персонажа</text>
+	</string>
+
 </string_table>
                         

@@ -43,5 +43,15 @@
 		<text>If you hold jump for more than this time, the ledge grabbing will be activated</text>
 	</string>
 
+	<string id="ui_mcm_demonized_ledge_grabbing_soundVolume">
+		<text>Sound Volume</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_gruntVolume">
+		<text>Grunts Volume</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_gruntProbability">
+		<text>Grunts Probability</text>
+	</string>
+
 </string_table>
                         
