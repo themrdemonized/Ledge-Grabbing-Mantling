@@ -302,7 +302,7 @@ function isWall(position, direction, targetAngle)
 end
 
 function isFlat(position, direction, targetAngle)
-	targetAngle = targetAngle or 23
+	targetAngle = targetAngle or 30
 
 	local normal = dgr.get_surface_normal(
 		position,
@@ -1130,7 +1130,7 @@ function checkJump(pressed)
 	elseif key_state(DIK_keys.DIK_SPACE) == 1 then
 		-- Otherwise try after sometime
 		if (time_global() - savedJumpPressedTime)  > settings.jumpTriggerTime then
-			if savedSpeed.y > -0.003 then
+			if savedSpeed.y > -0.005 then
 				if tryToClimb() then
 					UnregisterScriptCallback("actor_on_update", checkJump)
 					return
