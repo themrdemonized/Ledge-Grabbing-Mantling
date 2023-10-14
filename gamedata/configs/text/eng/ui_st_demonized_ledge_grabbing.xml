@@ -52,6 +52,9 @@
 	<string id="ui_mcm_demonized_ledge_grabbing_gruntProbability">
 		<text>Grunts Probability</text>
 	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_staminaDrain">
+		<text>Stamina Drain</text>
+	</string>
 
 </string_table>
                         

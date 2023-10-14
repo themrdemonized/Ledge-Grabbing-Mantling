@@ -649,6 +649,7 @@ end
 function getStaminaDrain()
 	local weight, minWeight, maxWeight = getActorWeights()
 	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.12, 0.72)
+	k = k * settings.staminaDrain
 	return k
 end
 
@@ -799,7 +800,8 @@ function tryToClimb()
 
 	-- make playerPos during climb so it will stay there during camera anim
 	-- Adjust it to fit animation
-	local playerPosOffset = 0.04
+	local playerPosOffsetFromWall = 0.035
+	local playerPosOffset = vector():set(0, -0.02, 0)
 	local d = vector():set(collisionPos):sub(climbPos)
 	d.y = 0
 	d:normalize()
@@ -808,7 +810,7 @@ function tryToClimb()
 		climbPos.y - camY,
 		collisionPos.z
 	) 
-	playerPos:mad(d, playerPosOffset)
+	playerPos:mad(d, playerPosOffsetFromWall):add(playerPosOffset)
 
 	-- Adjusted positions by difference from camera
 	local adjustedClimbPos = vector():set(climbPos):add(vector():set(0, camY, 0))
@@ -877,7 +879,7 @@ function tryToClimb()
 		end
 	end
 
-	-- game.only_allow_movekeys(true)
+	game.only_allow_movekeys(true)
 	game.set_actor_allow_ladder(false)
 
 	local CubicEaseInOut = drf.CubicEaseInOut
@@ -933,7 +935,7 @@ function tryToClimb()
 					end
 				end
 
-				-- game.only_allow_movekeys(false)
+				game.only_allow_movekeys(false)
 				game.set_actor_allow_ladder(true)
 
 				-- Set flag after some time

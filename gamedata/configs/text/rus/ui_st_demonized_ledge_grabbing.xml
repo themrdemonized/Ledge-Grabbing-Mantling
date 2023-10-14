@@ -33,7 +33,7 @@
 		<text>Точность захвата</text>
 	</string>
 	<string id="ui_mcm_demonized_ledge_grabbing_raySteps_desc">
-		<text>Большее число - лучшее обнаружение и позиция для захвата</text>
+		<text>Большее число - лучшее обнаружение и позиция для захвата с небольшим штрафом к производительности</text>
 	</string>
 
 	<string id="ui_mcm_demonized_ledge_grabbing_jumpTriggerTime">
@@ -51,6 +51,9 @@
 	</string>
 	<string id="ui_mcm_demonized_ledge_grabbing_gruntProbability">
 		<text>Вероятность звуков персонажа</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_staminaDrain">
+		<text>Расход стамины</text>
 	</string>
 
 </string_table>
