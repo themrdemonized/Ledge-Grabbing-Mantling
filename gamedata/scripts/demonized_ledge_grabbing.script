@@ -45,7 +45,7 @@ local climbActive = false
 helmets = {}
 
 -- Settings
-debugMode = false
+local debugMode = false
 
 local drf = demonized_randomizing_functions
 local dgr = demonized_geometry_ray
@@ -203,13 +203,11 @@ function speedSaver()
 	savedSpeed = speed
 end
 
-function actor_on_first_update()
-	savedActorPos = db.actor:position()
-	savedActorDir = db.actor:direction()
-	savedSpeedPos = db.actor:position()
-	savedCamY = device().cam_pos.y - savedActorPos.y
+local gizmosInitialized = false
+function initializeGizmos()
+	if gizmosInitialized then return end
+	gizmosInitialized = true
 
-	-- Debug gizmos
 	gizmos.sphereStart = debug_render.add_object(id + idOffset, DBG_ScriptObject.sphere):cast_dbg_sphere()
 	idOffset = idOffset + 1
 
@@ -228,6 +226,17 @@ function actor_on_first_update()
 	for i = 1, 20 do
 		gizmos.pathLines[i] = debug_render.add_object(id + idOffset, DBG_ScriptObject.line):cast_dbg_line()
 		idOffset = idOffset + 1
+	end
+end
+function actor_on_first_update()
+	savedActorPos = db.actor:position()
+	savedActorDir = db.actor:direction()
+	savedSpeedPos = db.actor:position()
+	savedCamY = device().cam_pos.y - savedActorPos.y
+
+	-- Debug gizmos
+	if debugMode then
+		initializeGizmos()
 	end
 
 	-- Get helmet list
@@ -1146,15 +1155,21 @@ function checkJump(pressed)
 	end
 end
 
+function toggleDebugMode()
+	debugMode = not debugMode
+	if debugMode then
+		initializeGizmos()
+	else
+		reset(nil, true)
+	end
+end
+
 function on_key_press(dik)
 	if dik == DIK_keys.DIK_H then
 		-- tryToClimb()
 	end
 	if dik == DIK_keys.DIK_J then
-		-- debugMode = not debugMode
-		-- if not debugMode then
-		-- 	reset(nil, true)
-		-- end
+		-- toggleDebugMode()
 	end
 	local bind = dik_to_bind(dik)
 	if bind == key_bindings.kJUMP then
