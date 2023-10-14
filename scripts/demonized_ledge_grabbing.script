@@ -42,6 +42,8 @@ local savedSpeed = vector():set(0,0,0)
 local savedSpeedPos = vector():set(0,0,0)
 local climbActive = false
 
+helmets = {}
+
 -- Settings
 local debugMode = false
 
@@ -206,6 +208,8 @@ function actor_on_first_update()
 	savedActorDir = db.actor:direction()
 	savedSpeedPos = db.actor:position()
 	savedCamY = device().cam_pos.y - savedActorPos.y
+
+	-- Debug gizmos
 	gizmos.sphereStart = debug_render.add_object(id + idOffset, DBG_ScriptObject.sphere):cast_dbg_sphere()
 	idOffset = idOffset + 1
 
@@ -224,6 +228,17 @@ function actor_on_first_update()
 	for i = 1, 20 do
 		gizmos.pathLines[i] = debug_render.add_object(id + idOffset, DBG_ScriptObject.line):cast_dbg_line()
 		idOffset = idOffset + 1
+	end
+
+	-- Get helmet list
+	empty_table(helmets)
+	local ini_eff = ini_file("plugins\\actor_effects.ltx")
+	local n = ini_eff:line_count("settings_helm")
+	for i = 0, n - 1 do
+		local result, id, value	= ini_eff:r_line_ex("settings_helm",i,"","")
+		if id and value then
+			helmets[id] = true
+		end
 	end
 
 	reset(nil, true)
@@ -637,16 +652,28 @@ function getRotationModifier()
 end
 
 -- Get sound for climbing
-outfitToSoundFolder = {
+outfitSoundFolder = {
 	[0] = [[ledge_grabbing\vaulting\naked\]],
 	o_light = [[ledge_grabbing\vaulting\light\]],
 	o_medium = [[ledge_grabbing\vaulting\medium\]],
 	o_heavy = [[ledge_grabbing\vaulting\heavy\]],
 	outfit_exo = [[ledge_grabbing\vaulting\exo\]],
 }
-gruntSoundFolder = [[ledge_grabbing\grunts\]]
+gruntSoundFolder = {
+	[0] = [[ledge_grabbing\grunts\naked\]],
+	mask = [[ledge_grabbing\grunts\mask\]],
+}
 soundFolderCache = {}
 function populateSoundFolderCache(folder)
+	if not folder then
+		print_tip("![Ledge Grabbing.populateSoundFolderCache] invalid folder")
+		return {}
+	end
+
+	if folder:sub(-1) ~= [[\]] then
+		folder = folder .. [[\]]
+	end
+
 	local t = {}
 	local fileList = getFS():file_list_open("$game_sounds$", folder, bit_or(FS.FS_ListFiles, FS.FS_RootOnly))
 	count = fileList and fileList:Size() or 0
@@ -673,7 +700,7 @@ function getSoundFromFolder(folder)
 	end
 	local sound = randomFromArray(soundFolderCache[folder])
 	if not sound then
-		print_tip("![Ledge Grabbing] no sounds found in %s", folder)
+		print_tip("![Ledge Grabbing.getSoundFromFolder] no sounds found in %s", folder)
 		return
 	end
 	local soundObj = xr_sound.get_safe_sound_object(sound)
@@ -684,19 +711,30 @@ function getOutfitSound()
 	-- Find folder by suit
 	local outfit = db.actor:item_in_slot(7)
 	local folder
+
 	if not outfit then
-		folder = outfitToSoundFolder[0]
+		folder = outfitSoundFolder[0]
 	else
 		local kind = SYS_GetParam(0, outfit:section(), "kind", -1)
 		local repair_type = SYS_GetParam(0, outfit:section(), "repair_type", -1)
-		folder = outfitToSoundFolder[repair_type] or outfitToSoundFolder[kind] or outfitToSoundFolder.o_medium
+		folder = outfitSoundFolder[repair_type] or outfitSoundFolder[kind] or outfitSoundFolder.o_medium
 	end
 
 	return getSoundFromFolder(folder)
 end
 
 function getGruntSound()
-	return getSoundFromFolder(gruntSoundFolder)
+	local outfit = db.actor:item_in_slot(7)
+	local helmet = db.actor:item_in_slot(12)
+	local folder
+
+	if (helmet and helmets[helmet:section()]) or (outfit and helmets[outfit:section()]) then
+		folder = gruntSoundFolder.mask
+	else
+		folder = gruntSoundFolder[0]
+	end
+
+	return getSoundFromFolder(folder)
 end
 
 function getSounds()
