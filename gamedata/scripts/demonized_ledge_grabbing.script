@@ -45,7 +45,7 @@ local climbActive = false
 helmets = {}
 
 -- Settings
-local debugMode = false
+debugMode = false
 
 local drf = demonized_randomizing_functions
 local dgr = demonized_geometry_ray
