@@ -669,7 +669,7 @@ gruntSoundFolder = {
 soundFolderCache = {}
 function populateSoundFolderCache(folder)
 	if not folder then
-		print_tip("![Ledge Grabbing.populateSoundFolderCache] invalid folder")
+		-- print_tip("![Ledge Grabbing.populateSoundFolderCache] invalid folder")
 		return {}
 	end
 
@@ -703,7 +703,7 @@ function getSoundFromFolder(folder)
 	end
 	local sound = randomFromArray(soundFolderCache[folder])
 	if not sound then
-		print_tip("![Ledge Grabbing.getSoundFromFolder] no sounds found in %s", folder)
+		-- print_tip("![Ledge Grabbing.getSoundFromFolder] no sounds found in %s", folder)
 		return
 	end
 	local soundObj = xr_sound.get_safe_sound_object(sound)
