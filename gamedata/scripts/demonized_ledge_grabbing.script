@@ -289,12 +289,12 @@ function reset(gizmosArr, force)
 end
 
 function getMaxClimbHeight()
-	return 2.7
+	return 2.65
 end
 
 -- I suggest not monkey patch min climb or you'll make climbing small obstacles harder
 function getMinClimbHeight()
-	return 1.42
+	return 1.4
 end
 
 function isWall(position, direction, targetAngle)
@@ -648,7 +648,7 @@ end
 -- Stamina drain modifier
 function getStaminaDrain()
 	local weight, minWeight, maxWeight = getActorWeights()
-	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.12, 0.72)
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.12, 0.6)
 	k = k * settings.staminaDrain
 	return k
 end
