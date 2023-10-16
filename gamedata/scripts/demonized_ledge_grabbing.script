@@ -1024,11 +1024,18 @@ function tryToClimb()
 			local delta, lo, hi = lookup(rotationZ, animTime * hudMotionSpeed)
 			local rotationZRes = cubicBezier2D(rotationZ[lo][1], rotationZ[lo][2], rotationZ[lo][3], rotationZ[lo][4], delta)
 
-			local cameraPos = vector():set(
-				startCameraPos.x + locationXRes.y,
-				startCameraPos.y + locationYRes.y,
-				startCameraPos.z + locationZRes.y
+			-- Get camera relative position from animation
+			local cameraOffset = vector():set(
+				locationXRes.y,
+				locationYRes.y,
+				locationZRes.y
 			)
+
+			-- Rotate relative position to player's direction
+			cameraOffset = vector_rotate_y(cameraOffset, deg(camDirHPB.x))
+
+			-- Set camera position
+			local cameraPos = vector():set(startCameraPos):add(cameraOffset)
 
 			-- Calculate procedural camera transform
 			k = normalize(time_global(), startTime, endTime)
