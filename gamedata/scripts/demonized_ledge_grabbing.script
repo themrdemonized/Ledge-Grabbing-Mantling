@@ -680,15 +680,16 @@ end
 -- Stamina drain modifier
 function getStaminaDrain()
 	local weight, minWeight, maxWeight = getActorWeights()
-	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.085, 0.55)
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.1, 0.5)
 	k = k * settings.staminaDrain
-	k = max(0.085, k)
+	k = max(0.1, k)
+	-- print_tip(" weight: %s \\n minWeight: %s \\n maxWeight: %s \\n getStaminaDrain %s ", weight, minWeight, maxWeight, k)
 	return k
 end
 
 function getSatietyDrain()
 	local weight, minWeight, maxWeight = getActorWeights()
-	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.001, 0.005)
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.001, 0.004)
 	return k
 end
 
@@ -879,10 +880,14 @@ function tryToClimb()
 
 	-- Gameplay params
 	local staminaDrain = getStaminaDrain()
-	local staminaDrainPerMs = staminaDrain / (endTime - startTime)
+	local staminaDrainPerMs = staminaDrain / (animationEndTime * 1000 / animationSpeed)
+	local initStamina = db.actor.power
+	local targetStamina = initStamina - staminaDrain
 
 	local satietyDrain = getSatietyDrain()
-	local satietyDrainPerMs = satietyDrain / (endTime - startTime)
+	local satietyDrainPerMs = satietyDrain / (animationEndTime * 1000 / animationSpeed)
+	local initSatiety = db.actor:cast_Actor():conditions():GetSatiety()
+	local targetSatiety = initSatiety - satietyDrain
 
 	-- Hide detector and weapon immediately (move to ruck works)
 	local activeSlot = db.actor:active_slot()
@@ -1068,6 +1073,7 @@ function tryToClimb()
 			)
 
 			-- print_tip(" locationXRes: %s \\n locationYRes: %s \\n locationZRes: %s \\n delta %s \\n lo %s \\n hi %s \\n animInK %s \\n animOutK %s \\n animTime %s \\n modifier %s", locationXRes, locationYRes, locationZRes, animDelta, animLo, animHi, animInK, animOutK, animTime, animationSpeedModifier)
+			-- print_tip(" staminaDrain: %s \\n staminaDrainPerMs: %s \\n initStamina: %s \\n targetStamina: %s \\n currentStamina: %s \\n delta: %s ", staminaDrain, staminaDrainPerMs, initStamina, targetStamina, db.actor.power, db.actor.power - targetStamina)
 
 			-- Calculate rotations
 			-- Interpolate look to grab point
