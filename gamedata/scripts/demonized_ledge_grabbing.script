@@ -345,9 +345,41 @@ function getDownVector()
 	return d
 end
 
+-- Patches
+-- FDDA
+local FDDAAnimPlaying = false
+if enhanced_animations then
+	if enhanced_animations.anim_prepare then
+		local eap = enhanced_animations.anim_prepare
+		enhanced_animations.anim_prepare = function(...)
+			FDDAAnimPlaying = true
+			return eap(...)
+		end
+	end
+	if enhanced_animations.stop_my_item_anim then
+		local eap = enhanced_animations.stop_my_item_anim
+		enhanced_animations.stop_my_item_anim = function(...)
+			FDDAAnimPlaying = false
+			return eap(...)
+		end
+	end
+	if ea_callbacks and ea_callbacks.EA_SendScriptCallback and ea_callbacks.EA_RegisterScriptCallback then
+		ea_callbacks.EA_RegisterScriptCallback("ea_on_item_use", function()
+			FDDAAnimPlaying = true
+		end)
+		ea_callbacks.EA_RegisterScriptCallback("ea_on_item_anim_stop", function()
+			FDDAAnimPlaying = false
+		end)
+	end
+end
+
 function checkClimbPrecondition()
 	-- Disable when on ladder
 	if IsMoveState("mcClimb") then return false end
+
+	-- Disable if FDDA animation plays
+	if FDDAAnimPlaying then return false end
+
 	return true
 end
 
@@ -648,8 +680,9 @@ end
 -- Stamina drain modifier
 function getStaminaDrain()
 	local weight, minWeight, maxWeight = getActorWeights()
-	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.12, 0.6)
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.085, 0.55)
 	k = k * settings.staminaDrain
+	k = max(0.085, k)
 	return k
 end
 
@@ -767,8 +800,6 @@ function tryToClimb()
 	if climbActive then return end
 	if not savedClimbPos then return end
 
-	SendScriptCallback("actor_on_climb_start")
-
 	-- Read animation data and set params
 	local animationSpeedModifier = getAnimationSpeedModifier()
 	local animationData = dup_table(demonized_ledge_grabbing_animation_data.data)
@@ -879,12 +910,17 @@ function tryToClimb()
 		end
 	end
 
-	game.only_allow_movekeys(true)
-	game.set_actor_allow_ladder(false)
-
 	local CubicEaseInOut = drf.CubicEaseInOut
 	local QuadraticEaseIn = drf.QuadraticEaseIn
 	local QuadraticEaseInOut = drf.QuadraticEaseInOut
+
+	-- Set actor properties
+	game.only_allow_movekeys(true)
+	game.set_actor_allow_ladder(false)
+
+	-- Callbacks
+	SendScriptCallback("actor_on_climb_start")
+	SetEvent("actor_climbing", true)
 
 	-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
 	nextTick(function()
@@ -935,12 +971,16 @@ function tryToClimb()
 					end
 				end
 
+				-- Set actor properties
 				game.only_allow_movekeys(false)
 				game.set_actor_allow_ladder(true)
 
-				-- Set flag after some time
+				-- Callbacks
 				UnregisterScriptCallback("actor_on_update", performClimb)
 				SendScriptCallback("actor_on_climb_end")
+				SetEvent("actor_climbing", nil)
+
+				-- Set flag after some time
 				CreateTimeEvent("ledge_grabbing", "reset", 0.5, function()
 					climbActive = false
 					reset()
