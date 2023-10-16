@@ -833,7 +833,7 @@ function tryToClimb()
 	-- make playerPos during climb so it will stay there during camera anim
 	-- Adjust it to fit animation
 	local playerPosOffsetFromWall = 0.035
-	local playerPosOffset = vector():set(0, -0.02, 0)
+	local playerPosOffset = vector():set(0, -0.024, 0)
 	local d = vector():set(collisionPos):sub(climbPos)
 	d.y = 0
 	d:normalize()
