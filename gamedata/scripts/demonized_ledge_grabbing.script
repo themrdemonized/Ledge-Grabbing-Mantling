@@ -485,16 +485,19 @@ function checkLedgeGrabbing()
 
 					-- Advance position a bit further and check it as well for better result
 					-- If successfull - use that, otherwise use result
-					local pos = vector():mad(actorPos, actorDir, i + 0.05)
-					pos.y = maxY
-					local res = ray:get(pos, dir)
-					if res.success then
-						local flat, normal = isFlat(pos, dir)
-						if normal and flat then
-							local valid = posCheck(res)
-							if valid then
-								climbPos = res.position
-								climbNormal = normal
+					for _, v in ipairs({0.05, 0.025}) do
+						local pos = vector():mad(actorPos, actorDir, i + v)
+						pos.y = maxY
+						local res = ray:get(pos, dir)
+						if res.success then
+							local flat, normal = isFlat(pos, dir)
+							if normal and flat then
+								local valid = posCheck(res)
+								if valid then
+									climbPos = res.position
+									climbNormal = normal
+									break
+								end
 							end
 						end
 					end
