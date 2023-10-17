@@ -800,7 +800,7 @@ end
 AddScriptCallback("actor_on_climb_start")
 AddScriptCallback("actor_on_climb_end")
 
-function tryToClimb()
+function tryToClimb(fromStanding)
 	if climbActive then return end
 	if not savedClimbPos then return end
 
@@ -879,6 +879,9 @@ function tryToClimb()
 	local startCameraPos = vector():mad(p, d, startCameraDistance)
 	startCameraPos:add(startCameraOffset)
 
+	-- Randomize prebaked camera movement
+	local randomPositionOffset = randomPlusMinus(10)
+
 	-- print_tip("playerPos %s \\n camY %s", playerPos, camY)
 
 	-- Gameplay params
@@ -920,7 +923,10 @@ function tryToClimb()
 
 	local CubicEaseInOut = drf.CubicEaseInOut
 	local QuadraticEaseIn = drf.QuadraticEaseIn
+	local QuadraticEaseOut = drf.QuadraticEaseOut
 	local QuadraticEaseInOut = drf.QuadraticEaseInOut
+	local SineEaseOut = drf.SineEaseOut
+	local camSmoothing = fromStanding and CubicEaseInOut or SineEaseOut
 
 	-- Set actor properties
 	game.only_allow_movekeys(true)
@@ -1040,7 +1046,7 @@ function tryToClimb()
 			)
 
 			-- Rotate relative position to player's direction
-			cameraOffset = vector_rotate_y(cameraOffset, deg(camDirHPB.x))
+			cameraOffset = vector_rotate_y(cameraOffset, deg(camDirHPB.x) + randomPositionOffset)
 
 			-- Set camera position
 			local cameraPos = vector():set(startCameraPos):add(cameraOffset)
@@ -1048,7 +1054,7 @@ function tryToClimb()
 			-- Calculate procedural camera transform
 			k = normalize(time_global(), startTime, endTime)
 			k = min(1, k)
-			local cameraPos2 = cubicBezier(p1, p2, p3, p4, CubicEaseInOut(k))
+			local cameraPos2 = cubicBezier(p1, p2, p3, p4, camSmoothing(k))
 
 			-- Interpolate between procedural and animation camera in animInTime
 			local animInK = min(1, normalize(animTime, 0, animInTime))
@@ -1186,11 +1192,11 @@ function checkJump(pressed)
 	if pressed == true then
 		-- If savedClimbPos is similar to camera height or below it - init climb immediately
 		if savedClimbPos and (savedClimbPos.y < device().cam_pos.y or similar(savedClimbPos.y, device().cam_pos.y, 0.35)) then
-			if tryToClimb() then
+			if tryToClimb(true) then
 				UnregisterScriptCallback("actor_on_update", checkJump)
 			end
 		elseif savedClimbPos and onScreenCheck() then
-	    	if tryToClimb() then
+	    	if tryToClimb(true) then
 				UnregisterScriptCallback("actor_on_update", checkJump)
 			end
 		end
@@ -1198,7 +1204,7 @@ function checkJump(pressed)
 		-- Otherwise try after sometime
 		if (time_global() - savedJumpPressedTime)  > settings.jumpTriggerTime then
 			if savedSpeed.y > -0.005 then
-				if tryToClimb() then
+				if tryToClimb(false) then
 					UnregisterScriptCallback("actor_on_update", checkJump)
 					return
 				end
