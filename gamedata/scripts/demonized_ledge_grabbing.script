@@ -289,7 +289,7 @@ function reset(gizmosArr, force)
 end
 
 function getMaxClimbHeight()
-	return 2.65
+	return 2.57
 end
 
 -- I suggest not monkey patch min climb or you'll make climbing small obstacles harder
