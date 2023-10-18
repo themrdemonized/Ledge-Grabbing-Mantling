@@ -892,10 +892,10 @@ function tryToClimb(fromStanding)
 	startCameraPos:add(startCameraOffset)
 
 	-- Randomize prebaked camera movement
-	local randomPositionOffset = randomPlusMinus(15)
-	local randomRotationCoeffX = random_float(0.85, 1.25)
-	local randomRotationCoeffY = random_float(0.85, 1.25)
-	local randomRotationCoeffZ = random_float(0.85, 1.25)
+	local randomPositionOffset = randomPlusMinus(15) * settings.animationRandomization
+	local randomRotationCoeffX = 1 + random_float(-0.15, 0.25) * settings.animationRandomization
+	local randomRotationCoeffY = 1 + random_float(-0.15, 0.25) * settings.animationRandomization
+	local randomRotationCoeffZ = 1 + random_float(-0.15, 0.25) * settings.animationRandomization
 
 	-- print_tip("playerPos %s \\n camY %s", playerPos, camY)
 
