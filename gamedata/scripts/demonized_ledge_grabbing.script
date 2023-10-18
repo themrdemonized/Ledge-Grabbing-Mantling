@@ -683,7 +683,7 @@ end
 -- Stamina drain modifier
 function getStaminaDrain()
 	local weight, minWeight, maxWeight = getActorWeights()
-	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.1, 0.5)
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.1, 0.55)
 	k = k * settings.staminaDrain
 	k = max(0.1, k)
 	-- print_tip(" weight: %s \\n minWeight: %s \\n maxWeight: %s \\n getStaminaDrain %s ", weight, minWeight, maxWeight, k)
@@ -692,7 +692,7 @@ end
 
 function getSatietyDrain()
 	local weight, minWeight, maxWeight = getActorWeights()
-	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.001, 0.004)
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.001, 0.0045)
 	return k
 end
 
