@@ -1200,7 +1200,7 @@ function checkJump(pressed)
 		-- Otherwise try after sometime
 		if (time_global() - savedJumpPressedTime)  > settings.jumpTriggerTime then
 			if savedSpeed.y > -0.005 then
-				if tryToClimb(false) then
+				if tryToClimb(savedSpeed.y < 0.001) then
 					UnregisterScriptCallback("actor_on_update", checkJump)
 					return
 				end
