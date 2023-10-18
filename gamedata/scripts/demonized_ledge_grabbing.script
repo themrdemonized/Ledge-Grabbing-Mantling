@@ -696,11 +696,6 @@ function getSatietyDrain()
 	return k
 end
 
--- Get additional rotation modifier for prebaked anim
-function getRotationModifier()
-	return 1
-end
-
 -- Get sound for climbing
 outfitSoundFolder = {
 	[0] = [[ledge_grabbing\vaulting\naked\]],
@@ -881,6 +876,7 @@ function tryToClimb(fromStanding)
 
 	-- Randomize prebaked camera movement
 	local randomPositionOffset = randomPlusMinus(10)
+	local randomRotationCoeff = random_float(0.85, 1.25)
 
 	-- print_tip("playerPos %s \\n camY %s", playerPos, camY)
 
@@ -1124,9 +1120,9 @@ function tryToClimb(fromStanding)
 
 			-- Apply additive from prebaked animation
 			cameraRot = vector():set(
-				cameraRot.x + rotationXRes.y * animRotationModifier * getRotationModifier(),
-				cameraRot.y + rotationYRes.y * animRotationModifier * getRotationModifier(),
-				cameraRot.z + rotationZRes.y * animRotationModifier * getRotationModifier()
+				cameraRot.x + rotationXRes.y * animRotationModifier * randomRotationCoeff,
+				cameraRot.y + rotationYRes.y * animRotationModifier * randomRotationCoeff,
+				cameraRot.z + rotationZRes.y * animRotationModifier * randomRotationCoeff
 			)
 
 			-- Return to initial rotation when returning from animation to procedural
