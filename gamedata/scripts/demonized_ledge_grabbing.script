@@ -674,8 +674,25 @@ function getAnimationSpeedModifier()
 	local weight, minWeight, maxWeight = getActorWeights()
 	local k = mapRangeClamped(weight, minWeight, maxWeight, 0, 0.33)
 	k = 1 - k
+
 	local staminaK = mapRangeClamped(db.actor.power, 0, 0.66, 0.87, 1)
 	k = k * staminaK
+
+	-- Reduce anim speed depending on outfit
+	local outfit = db.actor:item_in_slot(7)
+	if outfit then
+		local kind = SYS_GetParam(0, outfit:section(), "kind", -1)
+		local repair_type = SYS_GetParam(0, outfit:section(), "repair_type", -1)
+		if repair_type == "outfit_exo" then
+			k = k * 0.88
+		elseif kind == "o_heavy" then
+			k = k * 0.95
+		end
+	end
+
+	-- Randomize a bit
+	k = k * random_float(1, 1.12)
+
 	-- print_tip(" weight: %s \\n minWeight: %s \\n maxWeight: %s \\n k %s \\n staminaK %s", weight, minWeight, maxWeight, k, staminaK)
 	return k
 end
@@ -875,8 +892,10 @@ function tryToClimb(fromStanding)
 	startCameraPos:add(startCameraOffset)
 
 	-- Randomize prebaked camera movement
-	local randomPositionOffset = randomPlusMinus(10)
-	local randomRotationCoeff = random_float(0.85, 1.25)
+	local randomPositionOffset = randomPlusMinus(15)
+	local randomRotationCoeffX = random_float(0.85, 1.25)
+	local randomRotationCoeffY = random_float(0.85, 1.25)
+	local randomRotationCoeffZ = random_float(0.85, 1.25)
 
 	-- print_tip("playerPos %s \\n camY %s", playerPos, camY)
 
@@ -1120,9 +1139,9 @@ function tryToClimb(fromStanding)
 
 			-- Apply additive from prebaked animation
 			cameraRot = vector():set(
-				cameraRot.x + rotationXRes.y * animRotationModifier * randomRotationCoeff,
-				cameraRot.y + rotationYRes.y * animRotationModifier * randomRotationCoeff,
-				cameraRot.z + rotationZRes.y * animRotationModifier * randomRotationCoeff
+				cameraRot.x + rotationXRes.y * animRotationModifier * randomRotationCoeffX,
+				cameraRot.y + rotationYRes.y * animRotationModifier * randomRotationCoeffY,
+				cameraRot.z + rotationZRes.y * animRotationModifier * randomRotationCoeffZ
 			)
 
 			-- Return to initial rotation when returning from animation to procedural
