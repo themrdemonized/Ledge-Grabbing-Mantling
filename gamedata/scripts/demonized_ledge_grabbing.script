@@ -7,6 +7,7 @@ local deg = math.deg
 local max = math.max
 local min = math.min
 local sin = math.sin
+local sqrt = math.sqrt
 local floor = math.floor
 local huge = math.huge
 local random = math.random
@@ -395,7 +396,7 @@ function checkLedgeGrabbing()
 	local actorDir = device().cam_dir
 	local realActorPos = db.actor:position()
 	local realActorDir = db.actor:direction()
-	if vecSimilar(realActorPos, savedActorPos, 0.02) and vecSimilar(realActorDir, savedActorDir, 0.02) then return end
+	-- if vecSimilar(realActorPos, savedActorPos, 0.02) and vecSimilar(realActorDir, savedActorDir, 0.02) then return end
 	savedActorPos = realActorPos
 	savedActorDir = realActorDir
 
@@ -408,8 +409,23 @@ function checkLedgeGrabbing()
 
 	local pos = actorPos
 	local maxY = actorPos.y + getMaxClimbHeight()
+	do
+		local devicePos = device().cam_pos
+		local deviceDir = device().cam_dir
+		local p = deviceDir:getP()
+		if p < 0 then
+			maxY = actorPos.y + savedCamY
+		else
+			local a = settings.climbTriggerDistance
+			local c = a / cos(p)
+			local v = vector():mad(devicePos, deviceDir, c)
+			maxY = v.y
+		end
+	end
+	maxY = clamp(maxY, actorPos.y + getMinClimbHeight(), actorPos.y + getMaxClimbHeight())
 	local minY = actorPos.y + getMinClimbHeight()
 	local rayRange = maxY - minY
+	-- print_tip(" minY %s \\n, maxY \\ %s, rayRange %s \\n", minY, maxY, rayRange)
 
 	local dir = getDownVector()
 	local results = {
