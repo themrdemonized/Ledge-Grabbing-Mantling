@@ -409,7 +409,9 @@ function checkLedgeGrabbing()
 
 	local pos = actorPos
 	local maxY = actorPos.y + getMaxClimbHeight()
-	do
+	local minY = actorPos.y + getMinClimbHeight()
+	if settings.alternativeClimbDetection then
+		local savedMaxY = maxY
 		local devicePos = device().cam_pos
 		local deviceDir = device().cam_dir
 		local p = deviceDir:getP()
@@ -421,9 +423,9 @@ function checkLedgeGrabbing()
 			local v = vector():mad(devicePos, deviceDir, c)
 			maxY = v.y
 		end
+		maxY = clamp(maxY, minY, savedMaxY)
 	end
-	maxY = clamp(maxY, actorPos.y + getMinClimbHeight(), actorPos.y + getMaxClimbHeight())
-	local minY = actorPos.y + getMinClimbHeight()
+	
 	local rayRange = maxY - minY
 	-- print_tip(" minY %s \\n, maxY \\ %s, rayRange %s \\n", minY, maxY, rayRange)
 
@@ -726,7 +728,7 @@ function getAnimationSpeedModifier()
 	end
 
 	-- Randomize a bit
-	k = k * random_float(1, 1.12)
+	k = k * (1 + random_float(0, 0.12) * settings.animationRandomization)
 
 	-- print_tip(" weight: %s \\n minWeight: %s \\n maxWeight: %s \\n k %s \\n staminaK %s", weight, minWeight, maxWeight, k, staminaK)
 	return k
@@ -1279,17 +1281,45 @@ function toggleDebugMode()
 end
 
 function on_key_press(dik)
-	if dik == DIK_keys.DIK_H then
-		-- tryToClimb()
+	if (settings.inputMethod == "buttonPress" or settings.inputMethod == "both") 
+	and dik == settings.keybind
+	and ui_mcm.get_mod_key(settings.second_key)
+	then
+		if settings.modifier == 1 then
+			if ui_mcm.double_tap("demonized_ledge_grabbing", dik) then 
+                tryToClimb(true)
+            end
+		elseif settings.modifier == 0 then
+			ui_mcm.simple_press("demonized_ledge_grabbing", dik, function() 
+                tryToClimb(true)
+            end)
+		end
 	end
+
 	if dik == DIK_keys.DIK_J then
 		-- toggleDebugMode()
 	end
+
 	local bind = dik_to_bind(dik)
-	if bind == key_bindings.kJUMP then
+	if bind == key_bindings.kJUMP
+	and settings.inputMethod ~= "buttonPress"
+	then
 		savedJumpPressedTime = time_global()
 		checkJump(true)
 		RegisterScriptCallback("actor_on_update", checkJump)
+	end
+end
+
+function on_key_hold(dik)
+	if (settings.inputMethod == "buttonPress" or settings.inputMethod == "both") 
+	and dik == settings.keybind
+	and ui_mcm.get_mod_key(settings.second_key)
+	then
+		if settings.modifier == 2 then
+			if ui_mcm.key_hold("demonized_ledge_grabbing", dik) then 
+                tryToClimb() 
+            end 
+		end
 	end
 end
 
@@ -1297,6 +1327,7 @@ function on_game_start()
 	assert(level.set_cam_custom_position_direction, "[Ledge Grabbing] Modded Exes are required for mod to work, download from https://github.com/themrdemonized/STALKER-Anomaly-modded-exes")
 	assert(debug_render, "[Ledge Grabbing] Modded Exes are required for mod to work, download from https://github.com/themrdemonized/STALKER-Anomaly-modded-exes")
 	RegisterScriptCallback("on_key_press", on_key_press)
+	RegisterScriptCallback("on_key_hold", on_key_hold)
 	RegisterScriptCallback("on_loading_screen_key_prompt", actor_on_first_update)
 	RegisterScriptCallback("actor_on_first_update", load_settings)
 	RegisterScriptCallback("on_option_change", load_settings)

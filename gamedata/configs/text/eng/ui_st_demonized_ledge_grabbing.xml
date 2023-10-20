@@ -22,6 +22,14 @@
 		<text>Enable</text>
 	</string>
 
+	<string id="ui_mcm_demonized_ledge_grabbing_alternativeClimbDetection">
+		<text>Alternative Climb Detection</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_alternativeClimbDetection_desc">
+		<text>Alternative method will raycast to ledges closer to players crosshair. Standard method will raycast from fixed height</text>
+	</string>
+
 	<string id="ui_mcm_demonized_ledge_grabbing_climbTriggerDistance">
 		<text>Trigger Distance</text>
 	</string>
@@ -54,6 +62,29 @@
 	</string>
 	<string id="ui_mcm_demonized_ledge_grabbing_staminaDrain">
 		<text>Stamina Drain</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_inputMethod">
+		<text>Input Method</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_keybind">
+		<text>Keybind</text>
+	</string>
+	<string id="ui_mcm_lst_demonized_ledge_grabbing_inputMethod_jumpHold">
+		<text>Hold Jump Key</text>
+	</string>
+	<string id="ui_mcm_lst_demonized_ledge_grabbing_inputMethod_buttonPress">
+		<text>Button Press</text>
+	</string>
+	<string id="ui_mcm_lst_demonized_ledge_grabbing_inputMethod_both">
+		<text>Both</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_animationRandomization">
+		<text>Animation Randomization</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_animationRandomization_desc">
+		<text>Randomizes camera movement</text>
 	</string>
 
 </string_table>

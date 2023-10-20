@@ -2,17 +2,56 @@
 -- Ledge Grabbing
 -- Generated with AnomalyModCreator
 
-op = { id= "demonized_ledge_grabbing",sh=true ,gr={
+op = { id= "demonized_ledge_grabbing", sh=true ,gr={
 		{ id= "title", type= "slide", link= "ui_options_slider_player", text="ui_mcm_ledge_grabbing_title", size= {512,50}, spacing= 20 },
 		{id = "enable", type = "check", val = 1, def = true},
+		{id = "alternativeClimbDetection", type = "check", val = 1, def = true},
 		{id = "climbTriggerDistance", type = "track", val = 2, min = 0.6, max = 2, step = 0.05, def = 1.3},
 		{id = "raySteps", type = "track", val = 2, min = 10, max = 30, step = 1, def = 15},
 		{id = "jumpTriggerTime", type = "track", val = 2, min = 0, max = 200, step = 5, def = 70},
+
+        {id = "divider", type = "line"},
+
+		{
+			id = "inputMethod",
+			type = "list",
+			val = 0,
+			def="jumpHold",
+			content = {
+				{"jumpHold", "demonized_ledge_grabbing_inputMethod_jumpHold"},
+				{"buttonPress", "demonized_ledge_grabbing_inputMethod_buttonPress"},
+				{"both", "demonized_ledge_grabbing_inputMethod_both"},
+			},
+		},
+
+		{ id = "keybind", type = "key_bind", val = 2, 
+            def = DIK_keys.DIK_SPACE
+        },
+        { id = "modifier", type = ui_mcm.kb_mod_radio , val = 2, hint = "mcm_kb_mode",
+            def = 0, 
+            content = {
+                {0, "mcm_kb_mode_press"},
+                {1, "mcm_kb_mode_dtap"},
+                {2, "mcm_kb_mode_hold"} 
+            }
+        },
+        { id = "second_key", type = ui_mcm.kb_mod_radio , val = 2, hint = "mcm_kb_modifier",
+            def = 0,
+            content = { 
+                {0,"mcm_kb_mod_none"} , 
+                {1,"mcm_kb_mod_shift"} , 
+                {2,"mcm_kb_mod_ctrl"},
+                {3,"mcm_kb_mod_alt"}
+            }
+        },
+
+        {id = "divider", type = "line"},
+
+        {id = "animationRandomization", type = "track", val = 2, min = 0, max = 2, step = 0.1, def = 1},
 		{id = "soundVolume", type = "track", val = 2, min = 0, max = 1, step = 0.05, def = 1},
 		{id = "gruntVolume", type = "track", val = 2, min = 0, max = 1, step = 0.05, def = 1},
 		{id = "gruntProbability", type = "track", val = 2, min = 0, max = 1, step = 0.05, def = 0.5},
 		{id = "staminaDrain", type = "track", val = 2, min = 0.7, max = 1.5, step = 0.05, def = 1},
-		{id = "animationRandomization", type = "track", val = 2, min = 0, max = 2, step = 0.1, def = 1},
 	}
 }
 

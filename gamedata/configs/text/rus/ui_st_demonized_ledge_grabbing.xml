@@ -22,6 +22,14 @@
 		<text>Включить</text>
 	</string>
 
+	<string id="ui_mcm_demonized_ledge_grabbing_alternativeClimbDetection">
+		<text>Альтернативный метод обнаружения</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_alternativeClimbDetection_desc">
+		<text>При альтернативном методе луч будет падать на уступы, расположенные ближе к прицелу игрока. При стандартном методе луч будет падать с фиксированной высоты</text>
+	</string>
+
 	<string id="ui_mcm_demonized_ledge_grabbing_climbTriggerDistance">
 		<text>Расстояние срабатывания</text>
 	</string>
@@ -55,6 +63,30 @@
 	<string id="ui_mcm_demonized_ledge_grabbing_staminaDrain">
 		<text>Расход стамины</text>
 	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_inputMethod">
+		<text>Метод ввода</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_keybind">
+		<text>Клавиша</text>
+	</string>
+	<string id="ui_mcm_lst_demonized_ledge_grabbing_inputMethod_jumpHold">
+		<text>Удержание клавиши прыжка</text>
+	</string>
+	<string id="ui_mcm_lst_demonized_ledge_grabbing_inputMethod_buttonPress">
+		<text>Нажатие кнопки</text>
+	</string>
+	<string id="ui_mcm_lst_demonized_ledge_grabbing_inputMethod_both">
+		<text>Оба метода</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_animationRandomization">
+		<text>Рандомизация анимации</text>
+	</string>
+	<string id="ui_mcm_demonized_ledge_grabbing_animationRandomization_desc">
+		<text>Рандомизирует движение камеры</text>
+	</string>
+
 
 </string_table>
                         
