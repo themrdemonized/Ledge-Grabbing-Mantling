@@ -467,6 +467,25 @@ function checkLedgeGrabbing()
 					end
 
 					local valid = posCheck(res)
+
+					-- Material check
+					local result = res.result
+					if  result
+				    and result.material_name
+				    and result.material_shoot_factor
+				    then
+				        local name = result.material_name
+				        local shoot_factor = result.material_shoot_factor
+
+				        if false 
+				        or string.find(name, "bush") 
+				        or string.find(name, "water")
+				        -- or self.ray:isMaterialFlag("flShootable") and shoot_factor <= 0.01
+				        -- or (self.ray:isMaterialFlag("flBounceable") and not self.ray:isMaterialFlag("flPassable"))
+				        then
+				            valid = false
+				        end
+				    end
 					
 					if debugMode then
 						local p = gizmos.rayLines[j]
