@@ -29,6 +29,7 @@ local gizmos = {
 	climbNormal = nil,
 	sphereInter = nil,
 	sphereActor = nil,
+	collisionLine = nil
 }
 
 local savedClimbPos
@@ -218,6 +219,9 @@ function initializeGizmos()
 	gizmos.climbNormal = debug_render.add_object(id + idOffset, DBG_ScriptObject.line):cast_dbg_line()
 	idOffset = idOffset + 1
 
+	gizmos.collisionLine = debug_render.add_object(id + idOffset, DBG_ScriptObject.line):cast_dbg_line()
+	idOffset = idOffset + 1
+
 	gizmos.sphereInter = debug_render.add_object(id + idOffset, DBG_ScriptObject.sphere):cast_dbg_sphere()
 	idOffset = idOffset + 1
 
@@ -290,7 +294,7 @@ function reset(gizmosArr, force)
 end
 
 function getMaxClimbHeight()
-	return 2.57
+	return 2.53
 end
 
 -- I suggest not monkey patch min climb or you'll make climbing small obstacles harder
@@ -396,7 +400,7 @@ function checkLedgeGrabbing()
 	local actorDir = device().cam_dir
 	local realActorPos = db.actor:position()
 	local realActorDir = db.actor:direction()
-	-- if vecSimilar(realActorPos, savedActorPos, 0.02) and vecSimilar(realActorDir, savedActorDir, 0.02) then return end
+	if vecSimilar(realActorPos, savedActorPos, 0.02) and vecSimilar(realActorDir, savedActorDir, 0.02) and not settings.alternativeClimbDetection then return end
 	savedActorPos = realActorPos
 	savedActorDir = realActorDir
 
@@ -645,16 +649,36 @@ function checkLedgeGrabbing()
 	end
 
     -- Collision check for climb path - ray cast to interPos
-    local posToInterVec = vector():set(interPos):sub(actorPos)
+    local adjActorPos = vector():set(actorPos)
+    adjActorPos.y = adjActorPos.y + 0.02
+    local posToInterVec = vector():set(interPos):sub(adjActorPos)
     local collisionCheckRay = geometry_ray({
     	ray_range = posToInterVec:magnitude(),
 		flags = 2,
 		ignore_object = db.actor
     })
-	local pos = actorPos
+	local pos = adjActorPos
 	local dir = vector():set(posToInterVec):normalize()
 	local res = collisionCheckRay:get(pos, dir)
-	local collisionCheck = res.distance == posToInterVec:magnitude()
+	local collisionCheck = not res.success
+
+	if collisionCheck then
+		-- Collision check for climb path - ray cast to climbPos from interPos
+		local posToInterVec = vector():set(
+			climbPos.x,
+			math.max(interPos.y, climbPos.y + 0.05),
+			climbPos.z
+		):sub(interPos)
+	    local collisionCheckRay = geometry_ray({
+	    	ray_range = posToInterVec:magnitude(),
+			flags = 2,
+			ignore_object = db.actor
+	    })
+		local pos = interPos
+		local dir = vector():set(posToInterVec):normalize()
+		local res = collisionCheckRay:get(pos, dir)
+		collisionCheck = not res.success
+	end
 
 	if debugMode then
 	    local pathLinesNum = #gizmos.pathLines
@@ -668,6 +692,10 @@ function checkLedgeGrabbing()
 		    p.point_a = cubicBezier(p1, p2, p3, p4, k)
 		    p.point_b = cubicBezier(p1, p2, p3, p4, nextK)
 		end
+		gizmos.collisionLine.visible = true
+		gizmos.collisionLine.color = collisionCheck and fcolor():set(0,1,0,1) or fcolor():set(1,0,0,1)
+		gizmos.collisionLine.point_a = adjActorPos
+		gizmos.collisionLine.point_b = vector():mad(actorPos, vector():set(posToInterVec):normalize(), res.distance)
 	end
 
 	if not collisionCheck then
@@ -679,6 +707,12 @@ function checkLedgeGrabbing()
     savedClimbPos = climbPos
     savedInterPos = interPos
     savedClimbNormal = climbNormal
+
+    if debugMode then
+		if onScreenCheck() then
+			gizmos.sphereInter.color = fcolor():set(0,1,0,1)
+		end
+	end
 end
 
 -- Weight factor
@@ -721,9 +755,9 @@ function getAnimationSpeedModifier()
 		local kind = SYS_GetParam(0, outfit:section(), "kind", -1)
 		local repair_type = SYS_GetParam(0, outfit:section(), "repair_type", -1)
 		if repair_type == "outfit_exo" then
-			k = k * 0.88
+			k = k * 0.85
 		elseif kind == "o_heavy" then
-			k = k * 0.95
+			k = k * 0.92
 		end
 	end
 
@@ -884,7 +918,7 @@ function tryToClimb(fromStanding)
 
 	-- make playerPos during climb so it will stay there during camera anim
 	-- Adjust it to fit animation
-	local playerPosOffsetFromWall = 0.035
+	local playerPosOffsetFromWall = 0.037
 	local playerPosOffset = vector():set(0, -0.024, 0)
 	local d = vector():set(collisionPos):sub(climbPos)
 	d.y = 0
@@ -893,7 +927,7 @@ function tryToClimb(fromStanding)
 		collisionPos.x,
 		climbPos.y - camY,
 		collisionPos.z
-	) 
+	)
 	playerPos:mad(d, playerPosOffsetFromWall):add(playerPosOffset)
 
 	-- Adjusted positions by difference from camera
