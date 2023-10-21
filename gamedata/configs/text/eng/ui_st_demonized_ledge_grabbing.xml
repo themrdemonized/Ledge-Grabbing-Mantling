@@ -71,7 +71,7 @@
 		<text>Keybind</text>
 	</string>
 	<string id="ui_mcm_lst_demonized_ledge_grabbing_inputMethod_jumpHold">
-		<text>Hold Jump Key</text>
+		<text>Hold Key</text>
 	</string>
 	<string id="ui_mcm_lst_demonized_ledge_grabbing_inputMethod_buttonPress">
 		<text>Button Press</text>

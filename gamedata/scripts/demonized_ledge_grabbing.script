@@ -1286,7 +1286,7 @@ function checkJump(pressed)
 				UnregisterScriptCallback("actor_on_update", checkJump)
 			end
 		end
-	elseif key_state(DIK_keys.DIK_SPACE) == 1 then
+	elseif key_state(settings.keybind) == 1 then
 		-- Otherwise try after sometime
 		if (time_global() - savedJumpPressedTime)  > settings.jumpTriggerTime then
 			if savedSpeed.y > -0.005 then
@@ -1321,12 +1321,10 @@ function on_key_press(dik)
 	then
 		if settings.modifier == 1 then
 			if ui_mcm.double_tap("demonized_ledge_grabbing", dik) then 
-                tryToClimb(true)
+                tryToClimb(savedSpeed.y < 0.001)
             end
 		elseif settings.modifier == 0 then
-			ui_mcm.simple_press("demonized_ledge_grabbing", dik, function() 
-                tryToClimb(true)
-            end)
+			tryToClimb(savedSpeed.y < 0.001)
 		end
 	end
 
@@ -1334,8 +1332,8 @@ function on_key_press(dik)
 		-- toggleDebugMode()
 	end
 
-	local bind = dik_to_bind(dik)
-	if bind == key_bindings.kJUMP
+	if dik == settings.keybind
+	and ui_mcm.get_mod_key(settings.second_key)
 	and settings.inputMethod ~= "buttonPress"
 	then
 		savedJumpPressedTime = time_global()
