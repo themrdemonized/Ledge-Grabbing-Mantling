@@ -368,6 +368,13 @@ if enhanced_animations then
 			return eap(...)
 		end
 	end
+	if enhanced_animations.stop_my_monster_anim then
+		local eap = enhanced_animations.stop_my_monster_anim
+		enhanced_animations.stop_my_monster_anim = function(...)
+			FDDAAnimPlaying = false
+			return eap(...)
+		end
+	end
 	if ea_callbacks and ea_callbacks.EA_SendScriptCallback and ea_callbacks.EA_RegisterScriptCallback then
 		ea_callbacks.EA_RegisterScriptCallback("ea_on_item_use", function()
 			FDDAAnimPlaying = true
