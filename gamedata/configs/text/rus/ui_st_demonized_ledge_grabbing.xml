@@ -45,10 +45,10 @@
 	</string>
 
 	<string id="ui_mcm_demonized_ledge_grabbing_jumpTriggerTime">
-		<text>Время удержания прыжка для срабатывания</text>
+		<text>Время удержания клавиши для срабатывания</text>
 	</string>
 	<string id="ui_mcm_demonized_ledge_grabbing_jumpTriggerTime_desc">
-		<text>Если удерживать прыжок дольше указанного времени, будет активирован захват уступа</text>
+		<text>Если удерживать клавишу дольше указанного времени, будет активирован захват уступа</text>
 	</string>
 
 	<string id="ui_mcm_demonized_ledge_grabbing_soundVolume">

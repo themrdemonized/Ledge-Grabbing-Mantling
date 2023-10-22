@@ -45,10 +45,10 @@
 	</string>
 
 	<string id="ui_mcm_demonized_ledge_grabbing_jumpTriggerTime">
-		<text>Time to Hold Jump To Trigger</text>
+		<text>Time to Hold Key To Trigger</text>
 	</string>
 	<string id="ui_mcm_demonized_ledge_grabbing_jumpTriggerTime_desc">
-		<text>If you hold jump for more than this time, the ledge grabbing will be activated</text>
+		<text>If you hold for more than this time, the ledge grabbing will be activated</text>
 	</string>
 
 	<string id="ui_mcm_demonized_ledge_grabbing_soundVolume">
