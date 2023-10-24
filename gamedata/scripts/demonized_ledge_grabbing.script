@@ -384,6 +384,13 @@ if enhanced_animations then
 		end)
 	end
 end
+if zzz_skin and zzz_skin.stop_my_monster_anim then
+	local eap = zzz_skin.stop_my_monster_anim
+	zzz_skin.stop_my_monster_anim = function(...)
+		FDDAAnimPlaying = false
+		return eap(...)
+	end
+end
 
 function checkClimbPrecondition()
 	-- Disable when on ladder
@@ -487,7 +494,7 @@ function checkLedgeGrabbing()
 					-- If height is not enough - stop checking next position, assume that you cant move further
 					local function posCheck(res)
 						local ray = geometry_ray({
-							ray_range = 1.4,
+							ray_range = savedCamY,
 							flags = 2,
 							ignore_object = db.actor
 						})
