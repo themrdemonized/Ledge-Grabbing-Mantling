@@ -302,12 +302,17 @@ function getMinClimbHeight()
 	return 1.4
 end
 
-function isWall(position, direction, targetAngle)
+function isWall(position, direction, targetAngle, initialRay)
 	targetAngle = targetAngle or 10
 
 	local normal = dgr.get_surface_normal(
 		position,
-		direction
+		direction,
+		{
+			flags = 2,
+		},
+		nil,
+		initialRay
 	)
 	if not normal then return end
 
@@ -315,12 +320,17 @@ function isWall(position, direction, targetAngle)
     return angle < targetAngle, normal
 end
 
-function isFlat(position, direction, targetAngle)
+function isFlat(position, direction, targetAngle, initialRay)
 	targetAngle = targetAngle or 30
 
 	local normal = dgr.get_surface_normal(
 		position,
-		direction
+		direction,
+		{
+			flags = 2,
+		},
+		nil,
+		initialRay
 	)
 	if not normal then return end
 
@@ -402,6 +412,7 @@ function checkClimbPrecondition()
 	return true
 end
 
+local tg = 0
 function checkLedgeGrabbing()
 	if climbActive then return end
 	if not settings.enable then return reset() end
@@ -414,9 +425,23 @@ function checkLedgeGrabbing()
 	local actorDir = device().cam_dir
 	local realActorPos = db.actor:position()
 	local realActorDir = db.actor:direction()
-	if vecSimilar(realActorPos, savedActorPos, 0.02) and vecSimilar(realActorDir, savedActorDir, 0.02) and not settings.alternativeClimbDetection then return end
+
+	if vecSimilar(realActorPos, savedActorPos, 0.02)
+	and vecSimilar(realActorDir, savedActorDir, 0.02)
+	and not settings.alternativeClimbDetection
+	then
+		return
+	end
+
 	savedActorPos = realActorPos
 	savedActorDir = realActorDir
+
+	-- Throttle
+	local t = time_global()
+	if t - tg < settings.throttleCheck then
+		return
+	end
+	tg = t + settings.throttleCheck
 
 	-- Check if player has possibility to initiate climb
 	local collisionPos
@@ -469,7 +494,7 @@ function checkLedgeGrabbing()
 		pos.y = maxY
 		local res = ray:get(pos, dir)
 		if res.success then
-			local flat, normal = isFlat(pos, dir)
+			local flat, normal = isFlat(pos, dir, res)
 			if normal then
 				if not collisionPos then
 					collisionPos = results[j - 1][1]
@@ -545,7 +570,7 @@ function checkLedgeGrabbing()
 						pos.y = maxY
 						local res = ray:get(pos, dir)
 						if res.success then
-							local flat, normal = isFlat(pos, dir)
+							local flat, normal = isFlat(pos, dir, res)
 							if normal and flat then
 								local valid = posCheck(res)
 								if valid then
