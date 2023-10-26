@@ -568,6 +568,13 @@ function checkLedgeGrabbing()
 					for _, v in ipairs({0.05, 0.025}) do
 						local pos = vector():mad(actorPos, actorDir, i + v)
 						pos.y = maxY
+
+						local ray = geometry_ray({
+							ray_range = rayRange,
+							flags = 2,
+							ignore_object = db.actor
+						})
+
 						local res = ray:get(pos, dir)
 						if res.success then
 							local flat, normal = isFlat(pos, dir, res)
