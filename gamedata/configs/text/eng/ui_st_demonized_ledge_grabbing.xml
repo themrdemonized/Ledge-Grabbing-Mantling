@@ -30,6 +30,22 @@
 		<text>Alternative method will raycast to ledges closer to players crosshair. Standard method will raycast from fixed height</text>
 	</string>
 
+	<string id="ui_mcm_demonized_ledge_grabbing_playerWidthCheck">
+		<text>Player Bounds Check</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_playerWidthCheck_desc">
+		<text>If enabled, will perform additional raycast to see if player fits on the ledge. Might limit possible ledges to climb</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_throttleCheck">
+		<text>Ledge Climbing Check Delay</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_throttleCheck_desc">
+		<text>Time between checks in ms. Increase to improve performance at the cost of accuracy</text>
+	</string>
+
 	<string id="ui_mcm_demonized_ledge_grabbing_climbTriggerDistance">
 		<text>Trigger Distance</text>
 	</string>

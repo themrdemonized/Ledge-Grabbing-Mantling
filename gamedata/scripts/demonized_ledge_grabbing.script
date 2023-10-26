@@ -441,7 +441,7 @@ function checkLedgeGrabbing()
 	if t - tg < settings.throttleCheck then
 		return
 	end
-	tg = t + settings.throttleCheck
+	tg = max(t, tg + settings.throttleCheck)
 
 	-- Check if player has possibility to initiate climb
 	local collisionPos
@@ -494,7 +494,7 @@ function checkLedgeGrabbing()
 		pos.y = maxY
 		local res = ray:get(pos, dir)
 		if res.success then
-			local flat, normal = isFlat(pos, dir, res)
+			local flat, normal = isFlat(pos, dir, nil, res)
 			if normal then
 				if not collisionPos then
 					collisionPos = results[j - 1][1]
@@ -515,58 +515,10 @@ function checkLedgeGrabbing()
 
 				if flat then
 
-					-- Player height check on climbPos
-					-- If height is not enough - stop checking next position, assume that you cant move further
-					local function posCheck(res)
-						local ray = geometry_ray({
-							ray_range = savedCamY,
-							flags = 2,
-							ignore_object = db.actor
-						})
-						local heightRes = ray:get(res.position, vector():set(0,1,0))
-						return not heightRes.success
-					end
-
-					local valid = posCheck(res)
-
-					-- Material check
-					local result = res.result
-					if  result
-				    and result.material_name
-				    and result.material_shoot_factor
-				    then
-				        local name = result.material_name
-				        local shoot_factor = result.material_shoot_factor
-
-				        if false 
-				        or string.find(name, "bush") 
-				        or string.find(name, "water")
-				        -- or self.ray:isMaterialFlag("flShootable") and shoot_factor <= 0.01
-				        -- or (self.ray:isMaterialFlag("flBounceable") and not self.ray:isMaterialFlag("flPassable"))
-				        then
-				            valid = false
-				        end
-				    end
-					
-					if debugMode then
-						local p = gizmos.rayLines[j]
-						p.color = valid and fcolor():set(0,1,0,1) or fcolor():set(1,0,0,1)
-						for k = j + 1, #gizmos.rayLines do
-							local x = gizmos.rayLines[k]
-							x.visible = false
-						end
-					end
-
-					validCollisionPos = valid
-					climbPos = res.position
-					climbNormal = normal
-
-					if not validCollisionPos then break end
-
-					-- Advance position a bit further and check it as well for better result
-					-- If successfull - use that, otherwise use result
-					for _, v in ipairs({0.05, 0.025}) do
-						local pos = vector():mad(actorPos, actorDir, i + v)
+					-- Player width check
+					local playerWidthCheck = true
+					if settings.playerWidthCheck then
+						local pos = vector():mad(res.position, actorDir, 0.08)
 						pos.y = maxY
 
 						local ray = geometry_ray({
@@ -574,22 +526,91 @@ function checkLedgeGrabbing()
 							flags = 2,
 							ignore_object = db.actor
 						})
+						local r = ray:get(pos, dir)
+						if not r.success then
+							playerWidthCheck = true
+						else
+							playerWidthCheck = similar(res.position.y, r.position.y, 0.1)
+						end
+					end
+					if playerWidthCheck then
 
-						local res = ray:get(pos, dir)
-						if res.success then
-							local flat, normal = isFlat(pos, dir, res)
-							if normal and flat then
-								local valid = posCheck(res)
-								if valid then
-									climbPos = res.position
-									climbNormal = normal
-									break
+						-- Player height check on climbPos
+						-- If height is not enough - stop checking next position, assume that you cant move further
+						local function posCheck(res)
+							local ray = geometry_ray({
+								ray_range = savedCamY,
+								flags = 2,
+								ignore_object = db.actor
+							})
+							local heightRes = ray:get(res.position, vector():set(0,1,0))
+							return not heightRes.success
+						end
+
+						local valid = posCheck(res)
+
+						-- Material check
+						local result = res.result
+						if  result
+					    and result.material_name
+					    and result.material_shoot_factor
+					    then
+					        local name = result.material_name
+					        local shoot_factor = result.material_shoot_factor
+
+					        if false 
+					        or string.find(name, "bush") 
+					        or string.find(name, "water")
+					        -- or self.ray:isMaterialFlag("flShootable") and shoot_factor <= 0.01
+					        -- or (self.ray:isMaterialFlag("flBounceable") and not self.ray:isMaterialFlag("flPassable"))
+					        then
+					            valid = false
+					        end
+					    end
+						
+						if debugMode then
+							local p = gizmos.rayLines[j]
+							p.color = valid and fcolor():set(0,1,0,1) or fcolor():set(1,0,0,1)
+							for k = j + 1, #gizmos.rayLines do
+								local x = gizmos.rayLines[k]
+								x.visible = false
+							end
+						end
+
+						validCollisionPos = valid
+						climbPos = res.position
+						climbNormal = normal
+
+						if not validCollisionPos then break end
+
+						-- Advance position a bit further and check it as well for better result
+						-- If successfull - use that, otherwise use result
+						for _, v in ipairs({0.05, 0.025}) do
+							local pos = vector():mad(actorPos, actorDir, i + v)
+							pos.y = maxY
+
+							local ray = geometry_ray({
+								ray_range = rayRange,
+								flags = 2,
+								ignore_object = db.actor
+							})
+
+							local res = ray:get(pos, dir)
+							if res.success then
+								local flat, normal = isFlat(pos, dir, nil, res)
+								if normal and flat then
+									local valid = posCheck(res)
+									if valid then
+										climbPos = res.position
+										climbNormal = normal
+										break
+									end
 								end
 							end
 						end
-					end
 
-					break
+						break
+					end
 				end
 			else
 				if debugMode then

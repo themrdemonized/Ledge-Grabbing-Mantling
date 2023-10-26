@@ -30,6 +30,22 @@
 		<text>При альтернативном методе луч будет падать на уступы, расположенные ближе к прицелу игрока. При стандартном методе луч будет падать с фиксированной высоты</text>
 	</string>
 
+	<string id="ui_mcm_demonized_ledge_grabbing_playerWidthCheck">
+		<text>Проверка границ игрока</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_playerWidthCheck_desc">
+		<text>Если эта опция включена, то выполнится дополнительный рэйкаст, чтобы проверить, поместится ли игрок на уступе. Это может ограничить возможные уступы для подъема</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_throttleCheck">
+		<text>Задержка проверки уступов</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_throttleCheck_desc">
+		<text>Время между проверками в мс. Увеличьте для повышения производительности за счет снижения точности</text>
+	</string>
+
 	<string id="ui_mcm_demonized_ledge_grabbing_climbTriggerDistance">
 		<text>Расстояние срабатывания</text>
 	</string>
