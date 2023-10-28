@@ -44,6 +44,10 @@ local savedSpeed = vector():set(0,0,0)
 local savedSpeedPos = vector():set(0,0,0)
 local climbActive = false
 
+hardcoreModeProperties = {
+	maxClimbWeight = 100
+}
+
 helmets = {}
 
 -- Settings
@@ -408,6 +412,21 @@ function checkClimbPrecondition()
 
 	-- Disable if FDDA animation plays
 	if FDDAAnimPlaying then return false end
+
+	-- Disable if BHS is on and one of arms are broken
+	if settings.BHSMode and zzz_player_injuries then
+		local health = zzz_player_injuries.health
+		if health.leftarm <= 0 or health.rightarm <= 0 then
+			return false
+		end
+	end
+
+	if settings.hardcoreMode then
+		local weight, minWeight, maxWeight = getActorWeights()
+		if weight >= maxWeight then
+			return false
+		end
+	end
 
 	return true
 end
@@ -795,6 +814,9 @@ function getActorMaxWalkWeight()
 		local c_arty = obj:cast_Artefact()
 		maxWeight = maxWeight + (c_arty and c_arty:AdditionalInventoryWeight() or 0)
 	end)
+	if settings.hardcoreMode then
+		maxWeight = min(maxWeight, hardcoreModeProperties.maxClimbWeight)
+	end
 	return maxWeight
 end
 function getActorWeights()
