@@ -415,9 +415,9 @@ function checkClimbPrecondition()
 	if FDDAAnimPlaying then return false end
 
 	-- Disable if BHS is on and one of arms are broken
-	if settings.BHSMode and zzz_player_injuries then
+	if settings.BHSMode and zzz_player_injuries and zzz_player_injuries.health then
 		local health = zzz_player_injuries.health
-		if health.leftarm <= 0 or health.rightarm <= 0 then
+		if (health.leftarm and health.leftarm <= 0) or (health.rightarm and health.rightarm <= 0) then
 			return false
 		end
 	end
