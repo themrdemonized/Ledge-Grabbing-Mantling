@@ -38,6 +38,22 @@
 		<text>If enabled, will perform additional raycast to see if player fits on the ledge. Might limit possible ledges to climb</text>
 	</string>
 
+	<string id="ui_mcm_demonized_ledge_grabbing_hardcoreMode">
+		<text>Hardcore Mode</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_hardcoreMode_desc">
+		<text>When enabled, adds additional restrictions for climbing: \n 1. No climbing when player's weight is more than 90kg \n 2. No climbing when player's health is less than 60% \n 3. Increases stamina usage</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_BHSMode">
+		<text>BHS Integration</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_BHSMode_desc">
+		<text>When enabled, if you use Body Health System and one of player's arms is broken, it won't be possible to climb</text>
+	</string>
+
 	<string id="ui_mcm_demonized_ledge_grabbing_throttleCheck">
 		<text>Ledge Climbing Check Delay</text>
 	</string>

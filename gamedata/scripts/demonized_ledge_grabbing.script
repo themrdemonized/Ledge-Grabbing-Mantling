@@ -45,7 +45,8 @@ local savedSpeedPos = vector():set(0,0,0)
 local climbActive = false
 
 hardcoreModeProperties = {
-	maxClimbWeight = 100
+	maxClimbWeight = 90,
+	maxClimbHealth = 0.6,
 }
 
 helmets = {}
@@ -421,9 +422,14 @@ function checkClimbPrecondition()
 		end
 	end
 
+	-- Hardcore mode
 	if settings.hardcoreMode then
 		local weight, minWeight, maxWeight = getActorWeights()
 		if weight >= maxWeight then
+			return false
+		end
+		local health = db.actor.health
+		if health < hardcoreModeProperties.maxClimbHealth then
 			return false
 		end
 	end
@@ -860,7 +866,7 @@ end
 -- Stamina drain modifier
 function getStaminaDrain()
 	local weight, minWeight, maxWeight = getActorWeights()
-	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.1, 0.55)
+	local k = mapRangeClamped(weight, minWeight, maxWeight, 0.1, settings.hardcoreMode and 0.7 or 0.55)
 	k = k * settings.staminaDrain
 	k = max(0.1, k)
 	-- print_tip(" weight: %s \\n minWeight: %s \\n maxWeight: %s \\n getStaminaDrain %s ", weight, minWeight, maxWeight, k)

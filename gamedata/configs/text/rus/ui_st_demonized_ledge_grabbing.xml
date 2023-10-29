@@ -38,6 +38,22 @@
 		<text>Если эта опция включена, то выполнится дополнительный рэйкаст, чтобы проверить, поместится ли игрок на уступе. Это может ограничить возможные уступы для подъема</text>
 	</string>
 
+	<string id="ui_mcm_demonized_ledge_grabbing_hardcoreMode">
+		<text>Хардкорный режим</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_hardcoreMode_desc">
+		<text>При включении добавляет дополнительные ограничения: \n 1. Запрещено подниматься, если вес игрока превышает 90 кг.\n 2. Запрещено подниматься, если здоровье игрока менее 60% \n 3. Увеличивает расход выносливости</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_BHSMode">
+		<text>BHS интеграция</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_BHSMode_desc">
+		<text>Если включить эту функцию, то при использовании Body Health System и переломе одной из рук игрока, подъем будет невозможен</text>
+	</string>
+
 	<string id="ui_mcm_demonized_ledge_grabbing_throttleCheck">
 		<text>Задержка проверки уступов</text>
 	</string>
