@@ -1450,6 +1450,18 @@ function on_key_hold(dik)
 	end
 end
 
+-- Prevent strike damage when climbing
+function actor_on_before_hit(shit, bone_id, flags)
+	if not GetEvent("actor_climbing") then return end
+	if shit.draftsman 
+	and (shit.draftsman:id() == 0 or shit.draftsman:id() == 65535 or shit.draftsman:id() == -1)
+	and shit.type == hit.strike
+	then
+		shit.power = 0
+		flags.ret_value = false
+	end
+end
+
 function on_game_start()
 	assert(level.set_cam_custom_position_direction, "[Ledge Grabbing] Modded Exes are required for mod to work, download from https://github.com/themrdemonized/STALKER-Anomaly-modded-exes")
 	assert(debug_render, "[Ledge Grabbing] Modded Exes are required for mod to work, download from https://github.com/themrdemonized/STALKER-Anomaly-modded-exes")
@@ -1458,4 +1470,5 @@ function on_game_start()
 	RegisterScriptCallback("on_loading_screen_key_prompt", actor_on_first_update)
 	RegisterScriptCallback("actor_on_first_update", load_settings)
 	RegisterScriptCallback("on_option_change", load_settings)
+	RegisterScriptCallback("actor_on_before_hit", actor_on_before_hit)
 end
