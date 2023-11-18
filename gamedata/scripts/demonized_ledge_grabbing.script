@@ -1117,6 +1117,9 @@ function tryToClimb(fromStanding)
 	SendScriptCallback("actor_on_climb_start")
 	SetEvent("actor_climbing", true)
 
+	local firstUpdate = true
+	local savedHudWeapon = get_console_cmd(1, "hud_weapon")
+
 	-- 2 ticks required for hiding weapon forcefully with move to ruck for proper animation
 	nextTick(function()
 		local sound, gruntSound = getSounds()
@@ -1321,8 +1324,15 @@ function tryToClimb(fromStanding)
 				animOutK
 			)
 
-			db.actor:set_actor_position(currentPlayerPos, true)
-			db.actor:set_actor_direction(-camDirHPB.x)
+			-- 1 frame camera delay hack fix
+			if firstUpdate then
+				exec_console_cmd("hud_weapon 0")
+			else
+				db.actor:set_actor_position(currentPlayerPos, true)
+				db.actor:set_actor_direction(-camDirHPB.x)
+				exec_console_cmd("hud_weapon " .. (savedHudWeapon and 1 or 0))
+			end
+
 			level.set_cam_custom_position_direction(resultPosition, cameraRot, 1, true, false)
 
 			-- Start hud motion on next tick
@@ -1341,6 +1351,8 @@ function tryToClimb(fromStanding)
 			-- Drain satiety
 			local satietyK = k + 1
 			db.actor:change_satiety(-satietyDrainPerMs * satietyK * device().time_delta)
+
+			firstUpdate = false
 		end
 
 		RegisterScriptCallback("actor_on_update", performClimb)
@@ -1453,8 +1465,7 @@ end
 -- Prevent strike damage when climbing
 function actor_on_before_hit(shit, bone_id, flags)
 	if not GetEvent("actor_climbing") then return end
-	if shit.draftsman 
-	and (shit.draftsman:id() == 0 or shit.draftsman:id() == 65535 or shit.draftsman:id() == -1)
+	if (not shit.draftsman or (shit.draftsman and (shit.draftsman:id() == 0 or shit.draftsman:id() == 65535 or shit.draftsman:id() == -1)))
 	and shit.type == hit.strike
 	then
 		shit.power = 0
