@@ -38,6 +38,14 @@
 		<text>Если эта опция включена, то выполнится дополнительный рэйкаст, чтобы проверить, поместится ли игрок на уступе. Это может ограничить возможные уступы для подъема</text>
 	</string>
 
+	<string id="ui_mcm_demonized_ledge_grabbing_unstuckCheck">
+		<text>Проверка застревания игрока</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_unstuckCheck_desc">
+		<text>Если включено, то скрипт попытается передвинуть игрока, если захват уступа не был выполнен правильно</text>
+	</string>
+
 	<string id="ui_mcm_demonized_ledge_grabbing_hardcoreMode">
 		<text>Хардкорный режим</text>
 	</string>

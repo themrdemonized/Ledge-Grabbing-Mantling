@@ -6,12 +6,27 @@ data = {
 	animationFrameLength = 86,
 	originalFps = 60,
 	calculatedTime = 1.4333333333333333,
+
+	-- Below is the data to modify manually
+    -- Modifier to camera rotations
 	rotationModifier = 0.5,
+
+	-- Frame starting from prebaked animation will be used fully
 	animInFrame = 26,
+
+	-- Frame from which prebaked animation will blend out to procedural animation
 	animOutFrame = 50,
+
+	-- Speed of animation
 	animationSpeed = 0.8,
+
+	-- Speed of hands animation, affected by overall animationSpeed
 	hudMotionSpeed = 0.78,
+
+	-- Frame to play grunt sound
 	gruntSoundFrame = 26,
+
+	-- Generated curves, touch with care
 	curves = {
 		locationX = {
 			[0.0] = { vector():set(0.0, 0.0, 0), vector():set(2.0, 0.0, 0), vector():set(4.0, 0.0, 0), vector():set(6.0, 0.0, 0), },

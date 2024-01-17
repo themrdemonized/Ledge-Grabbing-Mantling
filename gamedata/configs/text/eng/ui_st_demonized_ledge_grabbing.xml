@@ -38,6 +38,14 @@
 		<text>If enabled, will perform additional raycast to see if player fits on the ledge. Might limit possible ledges to climb</text>
 	</string>
 
+	<string id="ui_mcm_demonized_ledge_grabbing_unstuckCheck">
+		<text>Stuck Check</text>
+	</string>
+
+	<string id="ui_mcm_demonized_ledge_grabbing_unstuckCheck_desc">
+		<text>If enabled, will try to unstuck the player if ledge grabbing failed to perform correctly</text>
+	</string>
+
 	<string id="ui_mcm_demonized_ledge_grabbing_hardcoreMode">
 		<text>Hardcore Mode</text>
 	</string>

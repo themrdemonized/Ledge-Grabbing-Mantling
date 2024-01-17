@@ -343,6 +343,7 @@ function isFlat(position, direction, targetAngle, initialRay)
     return angle < targetAngle, normal
 end
 
+-- Get bezier curve points for procedural camera movement
 function getClimbPathEndPoints(actorPos, collisionPos, interPos, climbPos)
 	local p1 = vector():set(actorPos)
 	local p2 = vector():set(interPos.x, actorPos.y, interPos.z)
@@ -978,6 +979,26 @@ end
 AddScriptCallback("actor_on_climb_start")
 AddScriptCallback("actor_on_climb_end")
 
+function amIStuck()
+	local geometry_ray = dgr.geometry_ray
+	local ray = geometry_ray({
+		ray_range = savedCamY,
+		flags = 2,
+		ignore_object = db.actor
+	})
+	local pos = db.actor:position()
+	local dir = VEC_Y
+	local res = ray:get(pos, dir)
+	if debugMode then
+		if res.success then
+			print_tip("stuck")
+		else
+			print_tip("not stuck")
+		end
+	end
+	return res.success
+end
+
 function tryToClimb(fromStanding)
 	if climbActive then return end
 	if not savedClimbPos then return end
@@ -1143,6 +1164,40 @@ function tryToClimb(fromStanding)
 				level.remove_cam_custom_position_direction()
 				game.stop_hud_motion()
 
+				local unstuckFunc
+				unstuckFunc = function()
+					if not settings.unstuckCheck then
+						UnregisterScriptCallback("actor_on_update", unstuckFunc)
+						return
+					end
+					
+					local stuck = amIStuck()
+					-- If height is too small for the player - push him upwards
+					if stuck then
+						if debugMode then
+							print_tip("height is too small")
+						end
+						local geometry_ray = dgr.geometry_ray
+						local ray = geometry_ray({
+					    	ray_range = getMaxClimbHeight(),
+							flags = 2,
+							ignore_object = db.actor
+					    })
+					    local pos = db.actor:position()
+					    pos.y = pos.y + camY + 0.1
+						local dir = getDownVector()
+						local res = ray:get(pos, dir)
+						if res.success then
+							res.position.y = res.position.y + 0.07
+							db.actor:set_actor_position(res.position)
+							UnregisterScriptCallback("actor_on_update", unstuckFunc)
+						end
+					else
+						UnregisterScriptCallback("actor_on_update", unstuckFunc)
+					end
+				end
+				RegisterScriptCallback("actor_on_update", unstuckFunc)
+
 				-- Restore weapons if had
 				if activeWpnId or activeDetectorId then
 					if activeWpnId then
@@ -1175,12 +1230,13 @@ function tryToClimb(fromStanding)
 
 				-- Callbacks
 				UnregisterScriptCallback("actor_on_update", performClimb)
-				SendScriptCallback("actor_on_climb_end")
-				SetEvent("actor_climbing", nil)
 
 				-- Set flag after some time
 				CreateTimeEvent("ledge_grabbing", "reset", 0.5, function()
 					climbActive = false
+					SendScriptCallback("actor_on_climb_end")
+					SetEvent("actor_climbing", nil)
+					UnregisterScriptCallback("actor_on_update", unstuckFunc)
 					reset()
 					return true
 				end)
